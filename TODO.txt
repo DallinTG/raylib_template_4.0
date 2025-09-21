@@ -1,0 +1,30 @@
+________________________________________TODO__________________________________________
+
+add conected textures to tmap
+add lighting
+add texturpacks
+fix hot relode
+
+add particles 
+add more types of blocks
+add mobul controls
+
+
+
+______________________________________Complete________________________________________
+add sound
+add musik
+fix hp particls 
+puzl mode
+add background
+add moving background
+add next block
+custome/random platform
+add setings page
+add next_block_up
+add camera/block spawning rules
+add scoring 
+add clay ui
+add ui
+add types to blocks
+add shapes to blocks
