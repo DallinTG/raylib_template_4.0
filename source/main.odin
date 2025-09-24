@@ -77,7 +77,7 @@ game_update :: proc() {
 
 @(export)
 game_init_window :: proc() {
-	rl.SetConfigFlags({.WINDOW_RESIZABLE})
+	rl.SetConfigFlags({.WINDOW_RESIZABLE,.FULLSCREEN_MODE})
 	rl.InitWindow(720, 720, "Orbital")
 
 	rl.SetWindowPosition(200, 200)

@@ -51,7 +51,7 @@ main :: proc() {
                 append(&commands,cer_dir,fmt.tprintf("-out:%s/game_debug.exe",out_dir))
             }
             when ODIN_OS == .Linux {
-	            append(&commands,cer_dir,fmt.tprintf("-out:%s/game_debug",out_dir))
+	            append(&commands,cer_dir,fmt.tprintf("-out:%s/game_debug",out_dir),"__NV_PRIME_RENDER_OFFLOAD=1", "__GLX_VENDOR_LIBRARY_NAME=nvidia")
             }
             append(&commands,"-debug")
             run_program_w(desc={working_dir=starting_dir,command=commands[:]},name=fmt.tprint(comp_flag))
