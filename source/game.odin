@@ -10,6 +10,7 @@ import noise"core:math/noise"
 import clay "/clay-odin"
 import "core:log"
 import "core:thread"
+import te "core:terminal"
 
 
 
@@ -29,7 +30,7 @@ init::proc(){
 	register_events()
 
 	log_system_info()
-
+	
 	// g.world.name="test_world"
 	
 	// rl.SetTargetFPS(10)
