@@ -15,6 +15,8 @@ import "core:time"
 import "core:path/filepath"
 import "core:strings"
 import edit"text_edit"
+import "vendor:cgltf"
+import "core:unicode/utf8"
 
 ui_render_command:clay.ClayArray(clay.RenderCommand)
 
@@ -51,9 +53,9 @@ ui_page_data::struct{
     center_offset:  [2]f32,
     curent_tab:     int,
     dec_proc:       proc(^ui_page_data),
-    str_builders:   [dynamic]strings.Builder,
-    text_edit_state:   [dynamic]edit.State,
-
+    // str_builders:   [dynamic]strings.Builder,
+    // text_edit_state:   [dynamic]edit.State,
+    text_boxes:[dynamic]ui_text_box,
 }
 
 ui_state::struct{
@@ -65,8 +67,15 @@ set_up_ui_pages::proc(){
     start.id = .start
     start.dec_proc = ui_start_page
     start.is_open = true
+    // start.text_boxes[0]=
     // append(&start.str_builders,strings.Builder{})
     // append(&start.text_edit_state,edit.State{})
+    box_setings:=defalt_text_box_settings()
+    assign_at       (&start.text_boxes,0, ui_text_box{})
+    init_text_box   (&start.text_boxes[0],box_setings)
+    start.text_boxes[0].text_edit_state.is_activ = true
+    assign_at       (&start.text_boxes,1, ui_text_box{})
+    init_text_box   (&start.text_boxes[1],box_setings)
 
     settings:=&g.ui_st.pages[.settings]
     settings.id = .settings
@@ -351,8 +360,8 @@ ui_start_page::proc(pd:^ui_page_data,){
     //     }
         
     // }
-    ui_input_text_box(pd,0)
-    ui_input_text_box(pd,1)
+    ui_input_text_box(&pd.text_boxes[1])
+    ui_input_text_box(&pd.text_boxes[0])
 }
 
 ui_settings_page::proc(pd:^ui_page_data,){
@@ -730,211 +739,7 @@ ui_TF_button::proc(id:u32,v:^bool){
     }
     if should_update_settings{save_settings()}
 }
-ui_input_text_box::proc(pd:^ui_page_data,str_indx:int=0){
 
-    // Example with pre-allocated buffer
-    // bytes: [32]byte
-    if len(pd.str_builders) <= str_indx{
-        append(&pd.str_builders,strings.Builder{})
-        append(&pd.text_edit_state,edit.State{})
-        reserve(&pd.str_builders,100)
-        edit.init(&pd.text_edit_state[str_indx],context.allocator,context.allocator,500)
-        // pd.text_edit_state[str_indx].builder=&pd.str_builders[str_indx]
-        state:= &pd.text_edit_state[str_indx]
-        if str_indx == 0 {state.is_activ=true}
-    }
-    
-    state:= &pd.text_edit_state[str_indx]
-    render_d:= &state.render_data
-    settings:= &state.settings
-    builder:= &pd.str_builders[str_indx]
-    edit.begin_persistent(state,0,builder)
-    str_builde:=&pd.str_builders[str_indx]
-
-    
-
-    if 0 <= str_indx-1                      {state.up_text_box = &pd.text_edit_state[str_indx-1]}   
-    if len(pd.text_edit_state)>str_indx+1   {state.up_text_box = &pd.text_edit_state[str_indx+1]}
-  
-
-    settings.max_lines = 5
-    settings.max_char = 100
-    settings.max_line_len = 20
-    settings.carit_color={255,255,255,255}
-    settings.blink_duration = .35
-
-    render_d.blink_time += g.time.dt
-
-    if render_d.blink_time > settings.blink_duration{
-        render_d.blink_time = 0
-        render_d.blink = !render_d.blink
-    }
-
-    if state.is_activ{
-    new_rune:=rl.GetCharPressed()
-    for new_rune != 0{
-        edit.input_rune(state,new_rune)
-        new_rune=rl.GetCharPressed()
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_back_space,   always_consume_d=true,){
-        edit.perform_command(state,.Backspace)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_del,          always_consume_d=true,){
-        edit.perform_command(state,.Delete)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_a_left,       always_consume_d=true,){
-        edit.perform_command(state,.Left)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_a_right,      always_consume_d=true,){
-        edit.perform_command(state,.Right)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_a_up,         always_consume_d=true,){
-        edit.perform_command(state,.Up)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_a_down,       always_consume_d=true,){
-        edit.perform_command(state,.Down)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    if is_input_event(.ui_enter,        always_consume_d=true,){
-        edit.perform_command(state,.New_Line)
-        state.repeat_cool_down=-edit.repeat_cool_down_time*2
-        render_d.blink=false
-        render_d.blink_time=0
-    }
-    
-    // fmt.print(strings.to_string(state.builder^),"\n")
-    state.repeat_cool_down += g.time.dt
-    if state.repeat_cool_down <-5 {state.repeat_cool_down = 0}
-    if state.repeat_cool_down > edit.repeat_cool_down_time{
-        if is_input_event(.ui_back_space,   ignore_p=true,){
-            edit.perform_command(state,.Backspace)
-            state.repeat_cool_down=edit.repeat_cool_down_time/2
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-        if is_input_event(.ui_del,          ignore_p=true,){
-            edit.perform_command(state,.Delete)
-            state.repeat_cool_down=edit.repeat_cool_down_time/2
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-        if is_input_event(.ui_a_left,       ignore_p=true,){
-            edit.perform_command(state,.Left)
-            state.repeat_cool_down=edit.repeat_cool_down_time/2
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-        if is_input_event(.ui_a_right,      ignore_p=true,){
-            edit.perform_command(state,.Right)
-            state.repeat_cool_down=edit.repeat_cool_down_time/2
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-        if is_input_event(.ui_a_up,         ignore_p=true,){
-            edit.perform_command(state,.Up)
-            state.repeat_cool_down=-edit.repeat_cool_down_time/2
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-        if is_input_event(.ui_a_down,       ignore_p=true,){
-            edit.perform_command(state,.Down)
-            state.repeat_cool_down=-edit.repeat_cool_down_time/2
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-        if is_input_event(.ui_enter,        ignore_p=true,){
-            edit.perform_command(state,.New_Line) 
-            state.repeat_cool_down=0
-            render_d.blink=false
-            render_d.blink_time=0
-        }
-    }
-    }
-
-    // fmt.print(state.lines_width)
-
-    edit.end(state)
-    if clay.UI()({
-        id = clay.ID_LOCAL("edit_text_box",cast(u32)str_indx),
-        layout = {
-            sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
-            padding = ui_pading( 8, 8, 8, 8 ),
-            childGap = ui_childGap(8),
-            childAlignment={x=.Center,y=.Center,},
-            layoutDirection=.TopToBottom,
-        },  
-        backgroundColor = h_col_l_2 if clay.Hovered() else {0,0,0,0} if pd.curent_tab!=str_indx else h_col_l_1,
-        
-        border=ui_border(x=4,y=4,t=4,b=4,col=h_col_d_3),
-    }){
-        // text_box_element:^text_box_element=new(text_box_element,context.temp_allocator)
-        // text_box_element.s=state
-
-        text_string:=strings.to_string(str_builde^)
-        line_start:int
-        line_end:int
-
-
-        
-        for &line_data in &state.line_data{
-            line_start=line_end
-            line_end+=line_data.width
-            
-            // fmt.print(line_data.width,"w",len(text_string),"length",line_start,"start",line_end,"end\n")
-            line_data.carit_pos=-1
-            line_data.state = state
-            if state.selection.x >= line_start && state.selection.x <= line_end{
-                line_data.carit_pos = state.selection.x - line_start
-                line_data.has_carit=true
-            }
-            t_data:=t_config_medium(align=.Left,user_data=&line_data)
-            t_data.wrapMode=.Newlines
-            if len(text_string)>=line_end{
-                offset:int
-                if len(text_string)>0{ if text_string[line_end-1:line_end]=="\n"{
-
-                    offset=1
-                    if line_data.width == 1{
-                        pading(t_data)
-                        if line_data.carit_pos > 0{
-                            line_data.has_carit=false 
-                        }
-                    }
-                }}
-                if line_start<=line_end-offset{
-                    clay.TextDynamic(text_string[line_start:line_end-offset],t_data)
-                }
-                
-            }else{pading(t_data)}
-            if line_data.width == 0{pading(t_data)}
-            
-            
-            
-        }
-    }
-    pading::proc(t_data:^clay.TextElementConfig){
-        clay.Text("\xC2\xA0",t_data)
-    }
-}
 ui_fixed_size::proc(x,y:f32)->(sizing:clay.Sizing){
     sizing = { width = clay.SizingFixed(x*cast(c.float)ui_m) , height = clay.SizingFixed(y*cast(c.float)ui_m) }
     return sizing

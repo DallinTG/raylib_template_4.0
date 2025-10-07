@@ -48,16 +48,6 @@ lerp_colors::proc(c1:[4]f32,c2:[4]f32,m:f32)->(f_color:[4]f32){
     return
 }
 
-
-
-
-
-
-
-
-
-
-
 maintain_window_info::proc(){
     g.window_info.h=rl.GetScreenHeight()  
     g.window_info.w=rl.GetScreenWidth()

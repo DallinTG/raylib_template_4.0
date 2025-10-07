@@ -27,6 +27,8 @@ State :: struct {
 
 
 	line_data:[dynamic]Line_Data,
+	pars_data:pars_data,
+	rune_style:[dynamic]rune_style,
 	// initialized each "frame" with `begin`
 	builder: ^strings.Builder, // let the caller store the text buffer data
 	up_index, down_index: int, // multi-lines
@@ -55,6 +57,16 @@ State :: struct {
 	using render_data:Render_Data,
 	using settings:Settings,
 }
+rune_style::struct{
+	color:[4]u8,
+}
+pars_type::enum{
+	str,
+
+}
+pars_data::struct{
+	string_is_oppen:bool,
+}
 Render_Data::struct{
 	userdata:rawptr,//can be used to interact whth text editing and rendering
 	blink:bool,
@@ -64,6 +76,7 @@ Settings::struct{
 	max_lines:int,
 	max_char:int,
 	max_line_len:int,
+	do_syntax_highlig:bool,
 	blink_duration:f32,
 	carit_color:[4]u8,
 
@@ -129,6 +142,7 @@ destroy :: proc(s: ^State) {
 	undo_clear(s, &s.redo)
 	delete(s.undo)
 	delete(s.redo)
+	if s.line_data != nil{delete(s.line_data)}
 	s.builder = nil
 }
 
@@ -517,7 +531,9 @@ copy :: proc(s: ^State) -> bool {
 // State.get_clipboard needs to be assigned
 paste :: proc(s: ^State) -> bool {
 	if s.get_clipboard != nil {
-		input_text(s, s.get_clipboard(s.clipboard_user_data) or_return)
+		str,ok:=s.get_clipboard(s.clipboard_user_data)
+		input_text(s, str)
+		delete(str)
 	}
 	
 	return s.get_clipboard != nil
@@ -650,11 +666,17 @@ pos_to_line_pos::proc(s:^State,pos:int)->(new_pos:int){
 	return
 }
 
+is_new_line::proc(b: byte) -> bool {
+	return b == '\n'
+}
+is_string::proc(b: byte) ->bool{
+	return (b == '\''||b == '\"')
+}
+
 mantaine_line_width_buffer::proc(s:^State){
 	clear(&s.line_data)
-	is_new_line::proc(b: byte) -> bool {
-		return b == '\n'
-	}
+	clear(&s.rune_style)
+	s.pars_data.string_is_oppen = false
 
 	buf: []byte
 	if s.builder != nil {
@@ -680,6 +702,11 @@ mantaine_line_width_buffer::proc(s:^State){
 				char_count-=1
 			}
 		}
+		if s.do_syntax_highlig{
+			syntax_highlighter(s,buf,pos,count,char_count,line_count)
+		}
+
+		
 		if is_new_line(buf[pos])||count >= s.max_line_len{
 			append(&s.line_data,Line_Data{width=count})
 			// fmt.print(count,"\n")
@@ -703,4 +730,13 @@ mantaine_line_width_buffer::proc(s:^State){
 	append(&s.line_data,Line_Data{width=count})
 	s.char_count = char_count
 	s.line_count = line_count
+}
+
+syntax_highlighter::proc(s:^State,buf:[]byte,pos:int,count:int,char_count:int,line_count:int){
+	if s.pars_data.string_is_oppen{
+		assign_at(&s.rune_style, char_count, rune_style{color=[4]u8{255,255,122,255}})
+	}
+	if is_string(buf[pos]){
+		s.pars_data.string_is_oppen =!s.pars_data.string_is_oppen
+	}
 }

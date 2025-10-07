@@ -95,32 +95,32 @@ clay_raylib_render :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand),
             font := raylibFonts[config.fontId].font
             rl.DrawTextEx(font, cstr_text, {bounds.x, bounds.y}, f32(config.fontSize), f32(config.letterSpacing), clay_color_to_rl_color(config.textColor))
             
-            if render_command.userData != nil{
-                line_data:^edit.Line_Data=cast(^edit.Line_Data)render_command.userData
-                state:^edit.State=line_data.state
-                // line_index:=edit.get_line_index_vis(state,state.selection.x)
-                // line_start:=edit.get_line_start_pos(state,line_index)
-                line_width:=line_data.width
-                // line_pos:=state.selection.x-line_start
+            // if render_command.userData != nil{
+            //     line_data:^edit.Line_Data=cast(^edit.Line_Data)render_command.userData
+            //     state:^edit.State=line_data.state
+            //     // line_index:=edit.get_line_index_vis(state,state.selection.x)
+            //     // line_start:=edit.get_line_start_pos(state,line_index)
+            //     line_width:=line_data.width
+            //     // line_pos:=state.selection.x-line_start
 
-                if line_data.show_debug_data {
-                    rl.DrawRectanglePro({bounds.x, bounds.y, bounds.width, bounds.height},{0,0},0,{255,255,255,25})
-                }
-                if line_data.carit_pos >-1 && len(text)>=line_data.carit_pos{
-                    text_to_carit:=text[:line_data.carit_pos] 
-                    cstr_text_to_carit := strings.clone_to_cstring(text_to_carit, allocator)
-                    size_to_carit :=rl.MeasureTextEx(font,cstr_text_to_carit ,cast(f32)config.fontSize,cast(f32)config.letterSpacing)
-                    if line_data.show_debug_data {
-                        rl.DrawRectanglePro({bounds.x, bounds.y, bounds.width, bounds.height},{0,0},0,{255,0,0,50})
-                        if line_data.has_carit{
-                            rl.DrawRectanglePro({bounds.x+size_to_carit.x, bounds.y, cast(f32)render_command.renderData.text.letterSpacing, bounds.height},{0,0},0,{255,0,0,255})
-                        }
-                    }
-                    if line_data.has_carit&& !state.blink && state.is_activ{
-                        rl.DrawRectanglePro({bounds.x+size_to_carit.x, bounds.y, cast(f32)render_command.renderData.text.letterSpacing, bounds.height},{0,0},0,cast(rl.Color)(state.carit_color))
-                    }
-                }
-            }
+            //     if line_data.show_debug_data {
+            //         rl.DrawRectanglePro({bounds.x, bounds.y, bounds.width, bounds.height},{0,0},0,{255,255,255,25})
+            //     }
+            //     if line_data.carit_pos >-1 && len(text)>=line_data.carit_pos{
+            //         text_to_carit:=text[:line_data.carit_pos] 
+            //         cstr_text_to_carit := strings.clone_to_cstring(text_to_carit, allocator)
+            //         size_to_carit :=rl.MeasureTextEx(font,cstr_text_to_carit ,cast(f32)config.fontSize,cast(f32)config.letterSpacing)
+            //         if line_data.show_debug_data {
+            //             rl.DrawRectanglePro({bounds.x, bounds.y, bounds.width, bounds.height},{0,0},0,{255,0,0,50})
+            //             if line_data.has_carit{
+            //                 rl.DrawRectanglePro({bounds.x+size_to_carit.x, bounds.y, cast(f32)render_command.renderData.text.letterSpacing, bounds.height},{0,0},0,{255,0,0,255})
+            //             }
+            //         }
+            //         if line_data.has_carit&& !state.blink && state.is_activ{
+            //             rl.DrawRectanglePro({bounds.x+size_to_carit.x, bounds.y, cast(f32)render_command.renderData.text.letterSpacing, bounds.height},{0,0},0,cast(rl.Color)(state.carit_color))
+            //         }
+            //     }
+            // }
         case .Image:
             config := render_command.renderData.image
             tint := config.backgroundColor
