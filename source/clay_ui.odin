@@ -17,6 +17,7 @@ import "core:strings"
 import edit"text_edit"
 import "vendor:cgltf"
 import "core:unicode/utf8"
+import hm "handle_map_static"
 
 ui_render_command:clay.ClayArray(clay.RenderCommand)
 
@@ -45,6 +46,7 @@ ui_pages::enum{
     create_world,
     settings,
 }
+max_text_boxes_per_page::10
 ui_page_data::struct{
     is_open:        bool,
     center_on_open: bool,
@@ -55,13 +57,26 @@ ui_page_data::struct{
     dec_proc:       proc(^ui_page_data),
     // str_builders:   [dynamic]strings.Builder,
     // text_edit_state:   [dynamic]edit.State,
-    text_boxes:[dynamic]ui_text_box,
+    text_boxes:[max_text_boxes_per_page]t_box_handle,
 }
 
 ui_state::struct{
     pages:[ui_pages]ui_page_data,
     world_saves_list:[]os.File_Info,
 }
+font_names_temp::enum u16 {
+    FONT_ID_BODY_16,
+    FONT_ID_TITLE_56,
+    FONT_ID_TITLE_52,
+    FONT_ID_TITLE_48,
+    FONT_ID_TITLE_36,
+    FONT_ID_TITLE_32,
+    FONT_ID_BODY_36,
+    FONT_ID_BODY_30,
+    FONT_ID_BODY_28,
+    FONT_ID_BODY_24,
+}
+
 set_up_ui_pages::proc(){
     start:=&g.ui_st.pages[.start]
     start.id = .start
@@ -71,11 +86,11 @@ set_up_ui_pages::proc(){
     // append(&start.str_builders,strings.Builder{})
     // append(&start.text_edit_state,edit.State{})
     box_setings:=defalt_text_box_settings()
-    assign_at       (&start.text_boxes,0, ui_text_box{})
-    init_text_box   (&start.text_boxes[0],box_setings)
-    start.text_boxes[0].text_edit_state.is_activ = true
-    assign_at       (&start.text_boxes,1, ui_text_box{})
-    init_text_box   (&start.text_boxes[1],box_setings)
+    start.text_boxes[0]= init_text_box(box_setings,"t_box_1")
+
+    start.text_boxes[1]= init_text_box(box_setings,"t_box_0")
+    t_box:=hm.get(&g.tex_box_data.t_boxes,start.text_boxes[0])
+    t_box.text_edit_state.is_activ = true
 
     settings:=&g.ui_st.pages[.settings]
     settings.id = .settings
@@ -88,7 +103,6 @@ set_up_ui_pages::proc(){
     worlds.dec_proc = ui_worlds_page
     worlds.curent_tab = 0
     worlds.is_open = false
-
 }
 
 
@@ -103,14 +117,26 @@ init_clay_ui::proc(){
     min_memory_size: u32 = clay.MinMemorySize()
     g.ui_mem = make([^]u8, min_memory_size)
     arena: clay.Arena = clay.CreateArenaWithCapacityAndMemory(auto_cast min_memory_size, g.ui_mem)
-    clay.Initialize(arena, { width = 720, height = 720 }, { handler = error_handler })
+    clay.Initialize(arena, { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }, { handler = error_handler })
     // clay.SetMeasureTextFunction(measureText,nil)
     clay.SetMeasureTextFunction(measure_text,nil)
     // loadFont(FONT_ID_TITLE_56, 56, "resources/Calistoga-Regular.ttf")
-    raylibFonts[1].font = rl.GetFontDefault()
-    raylibFonts[1].fontId = 1
-    raylibFonts[0].font = rl.GetFontDefault()
-    raylibFonts[0].fontId = 1
+    append(&raylib_fonts,Raylib_Font{0,rl.GetFontDefault()})
+    append(&raylib_fonts,Raylib_Font{1,rl.GetFontDefault()})
+    // raylib_fonts[1].fontId = 1
+    // raylib_fonts[0].font = rl.GetFontDefault()
+    // raylib_fonts[0].fontId = 1
+
+    load_font_data(font_names.calistoga_regular, 8, "assets/fonts/Calistoga_Regular.ttf")
+    load_font_data(font_names.quicksand_semibold, 8, "assets/fonts/Calistoga_Regular.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_TITLE_48, 48, "assets/fonts/Calistoga_Regular.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_TITLE_36, 36, "assets/fonts/Calistoga_Regular.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_TITLE_32, 32, "assets/fonts/Calistoga_Regular.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_BODY_36, 36, "assets/fonts/Quicksand_Semibold.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_BODY_30, 30, "assets/fonts/Quicksand_Semibold.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_BODY_28, 28, "assets/fonts/Quicksand_Semibold.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_BODY_24, 24, "assets/fonts/Quicksand_Semibold.ttf")
+    // loadFont(cast(u16)font_names_temp.FONT_ID_BODY_16, 16, "assets/fonts/Quicksand_Semibold.ttf")
 
     set_up_ui_pages()
     init_defalt_ui_settings()
@@ -125,6 +151,10 @@ update_clay_ui::proc(){
         clay.Vector2 { mouse_pos.x, mouse_pos.y },
         is_mouse_down,
     )
+    if is_input_event(.ui_debug){
+        clay.SetDebugModeEnabled(!clay.IsDebugModeEnabled())
+    }
+    
     clay.UpdateScrollContainers(false, transmute(clay.Vector2)rl.GetMouseWheelMoveV(), rl.GetFrameTime())
     clay.SetLayoutDimensions({auto_cast g.window_info.w,auto_cast g.window_info.h})
     cash_settings_ui()
@@ -141,8 +171,8 @@ create_ui_layout :: proc() -> clay.ClayArray(clay.RenderCommand) {
 
     clay.BeginLayout()
 
-    if clay.UI()({
-        id = clay.ID("outOuterContainer"),
+    if clay.UI(clay.ID("outOuterContainer"))({
+        // id = clay.ID("outOuterContainer"),
         layout = {
             sizing = { width = clay.SizingGrow({}), height = clay.SizingGrow({}) },
             padding = { 16, 16, 16, 16 },
@@ -199,8 +229,8 @@ update_world_dir_list::proc(){
 
 ui_worlds_page::proc(pd:^ui_page_data,){
     ui_do_b_box(pd)
-    if clay.UI()({
-        id = clay.ID(fmt.tprint(pd.id)),
+    if clay.UI(clay.ID(fmt.tprint(pd.id)))({
+        // id = clay.ID(fmt.tprint(pd.id)),
         layout = {
             sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
             padding = ui_pading( 3, 3, 3, 3 ),
@@ -216,8 +246,8 @@ ui_worlds_page::proc(pd:^ui_page_data,){
     }){
         
         body_id:=clay.ID_LOCAL("worlds_body")
-        if clay.UI()({
-            id = body_id,
+        if clay.UI(body_id)({
+            // id = body_id,
             layout = {
                 sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
                 padding = ui_pading( 10, 10, 10, 10 ),
@@ -234,8 +264,8 @@ ui_worlds_page::proc(pd:^ui_page_data,){
             ui_do_all_world_selection_tabs(pd)
 
             buton_box_id:=clay.ID_LOCAL("buton_box")
-            if clay.UI()({
-                id = buton_box_id,
+            if clay.UI(buton_box_id)({
+                // id = buton_box_id,
                 layout = {
                     sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
                     padding = ui_pading( 10, 10, 10, 10 ),
@@ -246,8 +276,8 @@ ui_worlds_page::proc(pd:^ui_page_data,){
             }){
                 
                 play_id:=clay.ID_LOCAL("Play")
-                if clay.UI()({
-                    id = play_id,
+                if clay.UI(play_id)({
+                    // id = play_id,
                     layout = {
                         sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
                         padding = ui_pading( 10, 10, 10, 10 ),
@@ -270,8 +300,8 @@ ui_worlds_page::proc(pd:^ui_page_data,){
                     }
                 }
                 new_world_id:=clay.ID_LOCAL("new_world")
-                if clay.UI()({
-                    id = new_world_id,
+                if clay.UI(new_world_id)({
+                    // id = new_world_id,
                     layout = {
                         sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
                         padding = ui_pading( 10, 10, 10, 10 ),
@@ -297,78 +327,78 @@ ui_worlds_page::proc(pd:^ui_page_data,){
 
 ui_start_page::proc(pd:^ui_page_data,){
     
-    // ui_do_b_box(pd)
-    // if clay.UI()({
-    //     id = clay.ID(fmt.tprint(pd.id)),
-    //     layout = {
-    //         sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
-    //         padding = ui_pading( 3, 3, 3, 3 ),
-    //         childGap = ui_childGap(6),
-    //         layoutDirection = .TopToBottom,
-    //         childAlignment = {x=.Center,y=.Center,},
+    ui_do_b_box(pd)
+    if clay.UI(clay.ID(fmt.tprint(pd.id)))({
+        // id = clay.ID(fmt.tprint(pd.id)),
+        layout = {
+            sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
+            padding = ui_pading( 3, 3, 3, 3 ),
+            childGap = ui_childGap(6),
+            layoutDirection = .TopToBottom,
+            childAlignment = {x=.Center,y=.Center,},
 
-    //     },
-    //     // floating={offset={math.round(pd.current_offset.x+pd.center_offset.x),math.round(pd.current_offset.y+pd.center_offset.y)},attachTo = .Parent},
-    //     floating={offset={math.round(pd.center_offset.x),math.round(pd.center_offset.y)},attachTo = .Parent},
-    //     // floating={attachTo = .Parent,clipTo=.AttachedParent,},
-    //     backgroundColor = {},
-    // }){
+        },
+        // floating={offset={math.round(pd.current_offset.x+pd.center_offset.x),math.round(pd.current_offset.y+pd.center_offset.y)},attachTo = .Parent},
+        floating={offset={math.round(pd.center_offset.x),math.round(pd.center_offset.y)},attachTo = .Parent},
+        // floating={attachTo = .Parent,clipTo=.AttachedParent,},
+        backgroundColor = {},
+    }){
         
-    //     body_id:=clay.ID_LOCAL("play")
-    //     if clay.UI()({
-    //         id = body_id,
-    //         layout = {
-    //             sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
-    //             padding = ui_pading( 10, 10, 10, 10 ),
-    //             childGap = ui_childGap(0),
-    //             layoutDirection=.TopToBottom,
-    //         },
-    //         // scroll={vertical=true},
-    //         // clip={vertical=true,childOffset = clay.GetScrollOffset(),},
-    //         // childOffset = clay.GetScrollOffset(),
-    //         backgroundColor = h_col_d_2 if clay.Hovered() else col_l_1,
-    //         border=ui_border(x=4,y=4,t=4,b=4,col=h_col_d_3),
-    //     }){
+        body_id:=clay.ID_LOCAL("play")
+        if clay.UI(body_id)({
+            // id = body_id,
+            layout = {
+                sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
+                padding = ui_pading( 10, 10, 10, 10 ),
+                childGap = ui_childGap(0),
+                layoutDirection=.TopToBottom,
+            },
+            // scroll={vertical=true},
+            // clip={vertical=true,childOffset = clay.GetScrollOffset(),},
+            // childOffset = clay.GetScrollOffset(),
+            backgroundColor = h_col_d_2 if clay.Hovered() else col_l_1,
+            border=ui_border(x=4,y=4,t=4,b=4,col=h_col_d_3),
+        }){
 
-    //         clay.Text("Play",t_config_medium())
-    //         if clay.Hovered(){if is_input_event(.ui_l_c){
-    //             update_world_dir_list()
-    //             g.ui_st.pages[.start].is_open = false
-    //             g.ui_st.pages[.worlds].is_open = true
-    //         }}
-    //     }
-    //     settings_id:=clay.ID_LOCAL("Settings")
-    //     if clay.UI()({
-    //         id = settings_id,
-    //         layout = {
-    //             sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
-    //             padding = ui_pading( 10, 10, 10, 10 ),
-    //             childGap = ui_childGap(0),
-    //             layoutDirection=.TopToBottom,
-    //         },
-    //         // scroll={vertical=true},
-    //         // clip={vertical=true,childOffset = clay.GetScrollOffset(),},
-    //         // childOffset = clay.GetScrollOffset(),
-    //         backgroundColor = h_col_d_2 if clay.Hovered() else col_l_1,
-    //         border=ui_border(x=4,y=4,t=4,b=4,col=h_col_d_3),
-    //     }){
+            clay.Text("Play",t_config_medium())
+            if clay.Hovered(){if is_input_event(.ui_l_c){
+                update_world_dir_list()
+                g.ui_st.pages[.start].is_open = false
+                g.ui_st.pages[.worlds].is_open = true
+            }}
+        }
+        settings_id:=clay.ID_LOCAL("Settings")
+        if clay.UI(settings_id)({
+            // id = settings_id,
+            layout = {
+                sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
+                padding = ui_pading( 10, 10, 10, 10 ),
+                childGap = ui_childGap(0),
+                layoutDirection=.TopToBottom,
+            },
+            // scroll={vertical=true},
+            // clip={vertical=true,childOffset = clay.GetScrollOffset(),},
+            // childOffset = clay.GetScrollOffset(),
+            backgroundColor = h_col_d_2 if clay.Hovered() else col_l_1,
+            border=ui_border(x=4,y=4,t=4,b=4,col=h_col_d_3),
+        }){
 
-    //         clay.Text("Settings",t_config_medium())
-    //         if clay.Hovered(){if is_input_event(.ui_l_c){
-    //             g.ui_st.pages[.settings].is_open = true
-    //         }}
-    //     }
+            clay.Text("Settings",t_config_medium())
+            if clay.Hovered(){if is_input_event(.ui_l_c){
+                g.ui_st.pages[.settings].is_open = true
+            }}
+        }
         
-    // }
-    ui_input_text_box(&pd.text_boxes[1])
-    ui_input_text_box(&pd.text_boxes[0])
+        ui_input_text_box(hm.get(&g.tex_box_data.t_boxes,pd.text_boxes[0]))
+        ui_input_text_box(hm.get(&g.tex_box_data.t_boxes,pd.text_boxes[1]))
+    }
 }
 
 ui_settings_page::proc(pd:^ui_page_data,){
     ui_do_b_box(pd)
     if is_input_event(.ui_esc){pd.is_open = false}
-    if clay.UI()({
-        id = clay.ID(fmt.tprint(pd.id)),
+    if clay.UI(clay.ID(fmt.tprint(pd.id)))({
+        // id = clay.ID(fmt.tprint(pd.id)),
         layout = {
             sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
             padding = ui_pading( 3, 3, 3, 3 ),
@@ -379,8 +409,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
         floating={offset={math.round(pd.current_offset.x+pd.center_offset.x),math.round(pd.current_offset.y+pd.center_offset.y)},attachTo = .Parent},
         backgroundColor = {},
     }){ 
-        if clay.UI()({
-            id = clay.ID_LOCAL("top_bar"),
+        if clay.UI(clay.ID_LOCAL("top_bar"))({
+            // id = clay.ID_LOCAL("top_bar"),
             layout = {
                 sizing = { width = clay.SizingGrow({}), height = clay.SizingGrow({}) },
                 padding = ui_pading( 10, 10, 10, 10 ),
@@ -392,8 +422,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
         }){
             clay.Text("Settings",t_config_small())
             
-            if clay.UI()({
-                id = clay.ID_LOCAL("top_bar_spacer"),
+            if clay.UI(clay.ID_LOCAL("top_bar_spacer"))({
+                // id = clay.ID_LOCAL("top_bar_spacer"),
                 layout = {
                     sizing = { width = clay.SizingGrow({}), height = clay.SizingGrow({}) },
                     padding = ui_pading( 0, 0, 0, 0 ),
@@ -410,8 +440,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
         
 
         body_id:=clay.ID_LOCAL("body")
-        if clay.UI()({
-            id = body_id,
+        if clay.UI(body_id)({
+            // id = body_id,
             layout = {
                 sizing = { width = clay.SizingFit({}), height = clay.SizingFit({min=300,max=cast(f32)g.window_info.h*0.75}) },
                 padding = ui_pading( 10, 10, 10, 10 ),
@@ -426,8 +456,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
         }){
             body_box:=clay.GetElementData(body_id).boundingBox
             // fmt.print(body_box,"\n")
-            if clay.UI()({
-                id = clay.ID_LOCAL("tabs box"),
+            if clay.UI(clay.ID_LOCAL("tabs box"))({
+                // id = clay.ID_LOCAL("tabs box"),
                 layout = {
                     sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
                     padding =  ui_pading( 10, 10, 10, 10 ),
@@ -441,8 +471,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
             }){
                 for tab in ui_settings_tab{
                     if tab != .none{
-                        if clay.UI()({
-                            id = clay.ID_LOCAL("tab box",cast(u32)tab),
+                        if clay.UI(clay.ID_LOCAL("tab box",cast(u32)tab))({
+                            // id = clay.ID_LOCAL("tab box",cast(u32)tab),
                             layout = {
                                 sizing = { width = clay.SizingFit({min=50,max=300}), height = clay.SizingFit({}) },
                                 padding =  ui_pading( 10, 10, 10, 10 ),
@@ -482,8 +512,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
                 index+=1
                 if cast(ui_settings_tab)pd.curent_tab in data.tab||cast(ui_settings_tab)pd.curent_tab == .All{
                     settings_box_id:=clay.ID_LOCAL("setting box",cast(u32)index)
-                    if clay.UI()({//settings box
-                        id = settings_box_id,
+                    if clay.UI(settings_box_id)({//settings box
+                        // id = settings_box_id,
                         layout = {
                             sizing = { width = clay.SizingGrow({}), height = clay.SizingGrow({}) },
                             padding =  ui_pading( 4, 4, 4, 4 ),
@@ -497,8 +527,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
                         b_box:=clay.GetElementData(settings_box_id).boundingBox
                         if b_box.y+b_box.height-1> body_box.y{//This is for spacing for when a element gets disablud for not beeding showne this is janke butt is huge for proformance//! i hope to find somthing better
                             clay.TextDynamic(data.display_name,t_config_small())
-                            if clay.UI()({//spacer box
-                                id = clay.ID_LOCAL("spacer box",cast(u32)index),
+                            if clay.UI(clay.ID_LOCAL("spacer box",cast(u32)index))({//spacer box
+                                // id = clay.ID_LOCAL("spacer box",cast(u32)index),
                                 layout = {
                                     sizing = { width = clay.SizingGrow({}), height = clay.SizingFit({}) },
                                     padding = ui_pading( 4, 4, 4, 4 ),
@@ -509,8 +539,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
 
                             }
                             
-                            if clay.UI()({//spacer box
-                                id = clay.ID_LOCAL("interactibl settings box",cast(u32)index),
+                            if clay.UI(clay.ID_LOCAL("interactibl settings box",cast(u32)index))({//spacer box
+                                // id = clay.ID_LOCAL("interactibl settings box",cast(u32)index),
                                 layout = {
                                     sizing = { width = clay.SizingGrow({}), height = clay.SizingFit({}) },
                                     padding = ui_pading( 4, 4, 4, 4) ,
@@ -527,8 +557,8 @@ ui_settings_page::proc(pd:^ui_page_data,){
                                 break
                             }
                         }else{//This is for spacing for when a element gets disablud for not beeding showne this is janke butt is huge for proformance
-                            if clay.UI()({//spacer box
-                                id = clay.ID_LOCAL("spacer box",cast(u32)index),
+                            if clay.UI(clay.ID_LOCAL("spacer box",cast(u32)index))({//spacer box
+                                // id = clay.ID_LOCAL("spacer box",cast(u32)index),
                                 layout = {
                                     sizing = { width = clay.SizingGrow({}), height = clay.SizingFit({}) },
                                     padding = ui_pading( 8, 8, 8, 8 ),
@@ -583,8 +613,8 @@ ui_do_b_box::proc(pd:^ui_page_data,){
 ui_do_all_world_selection_tabs::proc(pd:^ui_page_data){
     for &save_info,tab in &g.ui_st.world_saves_list{
         if save_info.is_dir{
-            if clay.UI()({
-                id = clay.ID_LOCAL("world_selection_tab",cast(u32)tab),
+            if clay.UI(clay.ID_LOCAL("world_selection_tab",cast(u32)tab))({
+                // id = clay.ID_LOCAL("world_selection_tab",cast(u32)tab),
                 layout = {
                     sizing = { width = clay.SizingGrow({}), height = clay.SizingFit({}) },
                     padding = ui_pading( 4, 4, 4, 4 ),
@@ -605,8 +635,8 @@ ui_do_all_world_selection_tabs::proc(pd:^ui_page_data){
     }
 }
 ui_x_button::proc(pd:^ui_page_data){
-    if clay.UI()({
-        id = clay.ID_LOCAL("x"),
+    if clay.UI(clay.ID_LOCAL("x"))({
+        // id = clay.ID_LOCAL("x"),
         layout = {
             sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
             padding = ui_pading( 4, 4.1, 2, 4 ),
@@ -648,8 +678,8 @@ ui_increment_setting_by_tab::proc(id:u32,setting_data:^setting_info){
                     ic_by*=8
                 }
             }
-            if clay.UI()({//spacer box
-                id = clay.ID_LOCAL("color settings box",id),
+            if clay.UI(clay.ID_LOCAL("color settings box",id))({//spacer box
+                // id = clay.ID_LOCAL("color settings box",id),
                 layout = {
                     sizing = { width = clay.SizingGrow({}), height = clay.SizingFit({}) },
                     padding = ui_pading( 4, 4, 4, 4 ),
@@ -692,8 +722,8 @@ ui_increment_setting_by_tab::proc(id:u32,setting_data:^setting_info){
 }
 ui_TF_button::proc(id:u32,v:^bool){
     should_update_settings:bool=false
-    if clay.UI()({
-        id = clay.ID_LOCAL("tf",id),
+    if clay.UI(clay.ID_LOCAL("tf",id))({
+        // id = clay.ID_LOCAL("tf",id),
         layout = {
             sizing = ui_fixed_size(32,32),
             padding = ui_pading(4, 4, 4, 4 ),
@@ -710,8 +740,8 @@ ui_TF_button::proc(id:u32,v:^bool){
             }
         }
         if v^{
-            if clay.UI()({
-                id = clay.ID_LOCAL("tf_in",id),
+            if clay.UI(clay.ID_LOCAL("tf_in",id))({
+                // id = clay.ID_LOCAL("tf_in",id),
                 layout = {
                     sizing = ui_fixed_size(30,30),
                     padding = ui_pading(4, 4, 4, 4 ),
@@ -723,8 +753,8 @@ ui_TF_button::proc(id:u32,v:^bool){
             }){}
         }
         if !v^{
-            if clay.UI()({
-                id = clay.ID_LOCAL("tf_in",id),
+            if clay.UI(clay.ID_LOCAL("tf_in",id))({
+                // id = clay.ID_LOCAL("tf_in",id),
                 layout = {
                     sizing = ui_fixed_size(30,30),
                     padding = ui_pading(4, 4, 4, 4 ),
@@ -778,6 +808,7 @@ t_config_small::proc(is_dark:bool=false,is_hl:bool=false, align: clay.TextAlignm
         }
     }
     tc=clay.TextConfig({fontId=0,fontSize=font_size_s,letterSpacing=cast(u16)(2*fs_m),textColor = col_1,textAlignment=align,userData=user_data})
+    // tc.letterSpacing=3
     return
 }
 t_config_medium::proc(is_dark:bool=false,is_hl:bool=false,align: clay.TextAlignment=.Left,user_data:rawptr=nil) -> (tc:^clay.TextElementConfig) {
@@ -800,6 +831,7 @@ t_config_medium::proc(is_dark:bool=false,is_hl:bool=false,align: clay.TextAlignm
         }
     }
     tc=clay.TextConfig({fontId=0,fontSize=font_size_m,letterSpacing=cast(u16)(2*fs_m),textColor = col_1,textAlignment=align,userData=user_data})
+    // tc.letterSpacing=3
     return
 }
 t_config_big::proc(is_dark:bool=false,is_hl:bool=false,align: clay.TextAlignment=.Left,user_data:rawptr=nil) -> (tc:^clay.TextElementConfig) {
@@ -822,6 +854,7 @@ t_config_big::proc(is_dark:bool=false,is_hl:bool=false,align: clay.TextAlignment
         }
     }
     tc=clay.TextConfig({fontId=0,fontSize=font_size_b,letterSpacing=cast(u16)(2*fs_m),textColor = col_1,textAlignment=align,userData=user_data})
+    // tc.letterSpacing=3
     return
 }
 
@@ -835,8 +868,8 @@ ui_increment_button::proc(
     min:f32=-10000,
 ){
     should_update_settings:bool=false
-    if clay.UI()({
-        id = clay.ID_LOCAL(name,id),
+    if clay.UI(clay.ID_LOCAL(name,id))({
+        // id = clay.ID_LOCAL(name,id),
         layout = {
             sizing = { width = clay.SizingFit({}), height = clay.SizingGrow({}) },
             padding = ui_pading( 4, 4, 4, 4 ),

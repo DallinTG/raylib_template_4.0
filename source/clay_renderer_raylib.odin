@@ -1,26 +1,50 @@
 package game
 
+import "core:unicode/utf8"
+import "base:runtime"
 import "base:sanitizer"
 import clay "/clay-odin"
 import "core:math"
 import "core:strings"
 import rl"vendor:raylib"
-import "base:runtime"
 import "core:fmt"
 import "core:c"
-import edit"text_edit"
+// import edit"text_edit"
+import edit"core:text/edit"
 
-RaylibFont :: struct {
+Raylib_Font :: struct {
     fontId: u16,
     font:   rl.Font,
 }
 custom_element::union{
     text_box_element,
+    costom_rune,
+}
+costom_rune::struct{
+
 }
 text_box_element::struct{
     s:^edit.State,
     line_width:int,
     carit_pos:int,
+}
+load_font_path :: proc(fontId: u16, fontSize: u16, path: cstring) {
+    assign_at(
+        &raylib_fonts,fontId,Raylib_Font{
+            font   = rl.LoadFontEx(path, cast(i32)fontSize * 2, nil, 0),
+            fontId = cast(u16)fontId,
+        }
+    )
+    rl.SetTextureFilter(raylib_fonts[fontId].font.texture, rl.TextureFilter.TRILINEAR)
+}
+load_font_data :: proc(fontId: font_names, fontSize: u16, path: cstring) {
+    assign_at(
+        &raylib_fonts,fontId,Raylib_Font{
+            font   = rl.LoadFontFromMemory("ttf",&all_fonts[fontId].data,cast(i32)len(all_fonts[fontId].data),cast(i32)fontSize * 2,nil,0),
+            fontId = cast(u16)fontId,
+        }
+    )
+    rl.SetTextureFilter(raylib_fonts[fontId].font.texture, rl.TextureFilter.TRILINEAR)
 }
 
 clayColorToRaylibColor :: proc(color: clay.Color) -> rl.Color {
@@ -28,45 +52,87 @@ clayColorToRaylibColor :: proc(color: clay.Color) -> rl.Color {
 }
 
 
-raylibFonts := [10]RaylibFont{}
+raylib_fonts := [dynamic]Raylib_Font{}
+
 
 measure_text :: proc "c" (text: clay.StringSlice, config: ^clay.TextElementConfig, userData: rawptr) -> clay.Dimensions {
-    // Measure string size for Font
+    // Needed for grapheme_count
     context = runtime.default_context()
-    textSize: clay.Dimensions = {0, 0}
 
-    maxTextWidth: f32 = 0
-    lineTextWidth: f32 = 0
+	line_width: f32 = 0
 
-    textHeight := cast(f32)config.fontSize
+	font := raylib_fonts[config.fontId].font
+	text_str := string(text.chars[:text.length])
 
+    // This function seems somewhat expensive, if you notice performance issues, you could assume
+    // - 1 codepoint per visual character (no grapheme clusters), where you can get the length from the loop
+    // - 1 byte per visual character (ascii), where you can get the length with `text.length`
+    grapheme_count, _, _ := utf8.grapheme_count(text_str)
 
-    fontToUse := raylibFonts[config.fontId].font
-    // fontToUse := raylibFonts[0].font
+	for letter, byte_idx in text_str {
+		glyph_index := rl.GetGlyphIndex(font, letter)
 
-    for i in 0 ..< int(text.length) {
-        if (text.chars[i] == '\n') {
-            maxTextWidth = max(maxTextWidth, lineTextWidth)
-            lineTextWidth = 0
-            continue
-        }
-        index := cast(i32)text.chars[i] - 32
-        if (fontToUse.glyphs[index].advanceX != 0) {
-            lineTextWidth += cast(f32)fontToUse.glyphs[index].advanceX
-        } else {
-            lineTextWidth += (fontToUse.recs[index].width + cast(f32)fontToUse.glyphs[index].offsetX)
-        }
-    }
-    text_ := string(text.baseChars[:text.length])
-    cloned := strings.clone_to_cstring(text_, context.temp_allocator)
-    lineTextWidth = rl.MeasureTextEx(fontToUse,cloned,auto_cast config.fontSize,auto_cast config.letterSpacing).x +rl.MeasureTextEx(fontToUse,".",auto_cast config.fontSize,auto_cast config.letterSpacing).x
-    // lineTextWidth+= cast(f32)(config.letterSpacing*cast(u16)text.length)
-    maxTextWidth = max(maxTextWidth, lineTextWidth)
-    textSize.width = maxTextWidth
-    textSize.height = textHeight
+        glyph := font.glyphs[glyph_index]
 
-    return textSize
+		if glyph.advanceX != 0 {
+			line_width += f32(glyph.advanceX)
+		} else {
+			line_width += font.recs[glyph_index].width + f32(font.glyphs[glyph_index].offsetX)
+		}
+	}
+
+	scaleFactor := f32(config.fontSize) / f32(font.baseSize)
+
+    // Note: 
+    //   I'd expect this to be `grapheme_count - 1`, 
+    //   but that seems to be one letterSpacing too small
+    //   maybe that's a raylib bug, maybe that's Clay?
+
+	total_spacing := f32(grapheme_count) * f32(config.letterSpacing)
+    // total_spacing := (f32(grapheme_count) * f32(config.letterSpacing))+f32(config.letterSpacing)/2
+
+	return {width = line_width * scaleFactor + total_spacing, height = f32(config.fontSize)}
 }
+measure_text_string :: proc "c" (text:string, config: ^clay.TextElementConfig, userData: rawptr=nil) -> [2]f32 {
+    // Needed for grapheme_count
+    context = runtime.default_context()
+
+	line_width: f32 = 0
+
+	font := raylib_fonts[config.fontId].font
+	text_str := text
+
+    // This function seems somewhat expensive, if you notice performance issues, you could assume
+    // - 1 codepoint per visual character (no grapheme clusters), where you can get the length from the loop
+    // - 1 byte per visual character (ascii), where you can get the length with `text.length`
+    grapheme_count, _, _ := utf8.grapheme_count(text_str)
+
+	for letter, byte_idx in text_str {
+		glyph_index := rl.GetGlyphIndex(font, letter)
+
+        glyph := font.glyphs[glyph_index]
+
+		if glyph.advanceX != 0 {
+			line_width += f32(glyph.advanceX)
+		} else {
+			line_width += font.recs[glyph_index].width + f32(font.glyphs[glyph_index].offsetX)
+		}
+	}
+
+	scaleFactor := f32(config.fontSize) / f32(font.baseSize)
+
+    // Note: 
+    //   I'd expect this to be `grapheme_count - 1`, 
+    //   but that seems to be one letterSpacing too small
+    //   maybe that's a raylib bug, maybe that's Clay?
+
+    total_spacing := f32(grapheme_count) * f32(config.letterSpacing)
+	// total_spacing := (f32(grapheme_count) * f32(config.letterSpacing))-f32(config.letterSpacing)/2
+
+	return [2]f32{line_width * scaleFactor + total_spacing,f32(config.fontSize)}
+}
+
+
 clay_color_to_rl_color :: proc(color: clay.Color) -> rl.Color {
     return {u8(color.r), u8(color.g), u8(color.b), u8(color.a)}
 }
@@ -92,35 +158,10 @@ clay_raylib_render :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand),
             // Raylib uses C strings instead of Odin strings, so we need to clone
             // Assume this will be freed elsewhere since we default to the temp allocator
             cstr_text := strings.clone_to_cstring(text, allocator)
-            font := raylibFonts[config.fontId].font
+
+            font := raylib_fonts[config.fontId].font
             rl.DrawTextEx(font, cstr_text, {bounds.x, bounds.y}, f32(config.fontSize), f32(config.letterSpacing), clay_color_to_rl_color(config.textColor))
             
-            // if render_command.userData != nil{
-            //     line_data:^edit.Line_Data=cast(^edit.Line_Data)render_command.userData
-            //     state:^edit.State=line_data.state
-            //     // line_index:=edit.get_line_index_vis(state,state.selection.x)
-            //     // line_start:=edit.get_line_start_pos(state,line_index)
-            //     line_width:=line_data.width
-            //     // line_pos:=state.selection.x-line_start
-
-            //     if line_data.show_debug_data {
-            //         rl.DrawRectanglePro({bounds.x, bounds.y, bounds.width, bounds.height},{0,0},0,{255,255,255,25})
-            //     }
-            //     if line_data.carit_pos >-1 && len(text)>=line_data.carit_pos{
-            //         text_to_carit:=text[:line_data.carit_pos] 
-            //         cstr_text_to_carit := strings.clone_to_cstring(text_to_carit, allocator)
-            //         size_to_carit :=rl.MeasureTextEx(font,cstr_text_to_carit ,cast(f32)config.fontSize,cast(f32)config.letterSpacing)
-            //         if line_data.show_debug_data {
-            //             rl.DrawRectanglePro({bounds.x, bounds.y, bounds.width, bounds.height},{0,0},0,{255,0,0,50})
-            //             if line_data.has_carit{
-            //                 rl.DrawRectanglePro({bounds.x+size_to_carit.x, bounds.y, cast(f32)render_command.renderData.text.letterSpacing, bounds.height},{0,0},0,{255,0,0,255})
-            //             }
-            //         }
-            //         if line_data.has_carit&& !state.blink && state.is_activ{
-            //             rl.DrawRectanglePro({bounds.x+size_to_carit.x, bounds.y, cast(f32)render_command.renderData.text.letterSpacing, bounds.height},{0,0},0,cast(rl.Color)(state.carit_color))
-            //         }
-            //     }
-            // }
         case .Image:
             config := render_command.renderData.image
             tint := config.backgroundColor
@@ -234,6 +275,9 @@ clay_raylib_render :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand),
             cust_el :=cast(^custom_element)render_command.userData
             switch v in cust_el {
                 case text_box_element: 
+
+                case costom_rune:
+                    
 
             }
                 

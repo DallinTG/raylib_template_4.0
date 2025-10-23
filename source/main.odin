@@ -64,6 +64,7 @@ Game_Memory :: struct {
 	event:			event_data,
 	thread_pool:	thread.Pool,
 	world_gen_thread:^thread.Thread,
+	tex_box_data:tex_box_data,
 	
 }
 

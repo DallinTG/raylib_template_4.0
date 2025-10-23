@@ -23,6 +23,7 @@ input_data::struct{
 
 }
 input_e_id::enum{
+    ui_debug,
     ui_l_c,
     ui_r_c,
     ui_m_c,
@@ -65,6 +66,7 @@ input_event_data::struct{
 max_key_combo::4
 register_events::proc(){
     register_event(.jump,{{{data=               {id= rl.KeyboardKey.SPACE,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    register_event(.ui_debug,{{{data=           {id= rl.KeyboardKey.F10,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_l_c,{{{data=             {id= rl.MouseButton.LEFT,           pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_r_c,{{{data=             {id= rl.MouseButton.RIGHT,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_m_c,{{{data=             {id= rl.MouseButton.MIDDLE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})

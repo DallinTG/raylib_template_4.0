@@ -8,6 +8,8 @@ asset :: struct {
 }
 
 font_names :: enum {
+	calistoga_regular,
+	quicksand_semibold,
 }
 
 shader_names :: enum {
@@ -49,6 +51,8 @@ music_names :: enum {
 }
 
 	all_fonts := [font_names]asset {
+		.calistoga_regular = { path = "fonts/Calistoga_Regular.ttf",  data = #load("../assets/fonts/Calistoga_Regular.ttf"), },
+		.quicksand_semibold = { path = "fonts/Quicksand_Semibold.ttf",  data = #load("../assets/fonts/Quicksand_Semibold.ttf"), },
 	}
 
 	all_shaders := [shader_names]asset {

@@ -99,7 +99,7 @@ main :: proc() {
 		}
 	}
 
-		{
+	{
 		file_infos := dir_path_to_file_infos("../../assets/fonts")
 		for fi in file_infos {
 			if strings.has_suffix(fi.name, ".ttf") {

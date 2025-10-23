@@ -348,9 +348,9 @@ save_settings::proc(){
 ui_m:f32
 fs_m:f32
 
-font_size_s:u16
-font_size_m:u16
-font_size_b:u16
+font_size_s:u16=16
+font_size_m:u16=32
+font_size_b:u16=64
     
 text_l_col_1:clay.Color
 text_l_col_2:clay.Color

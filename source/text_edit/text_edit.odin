@@ -1,3 +1,4 @@
+#+build
 /*
 Based off the articles by rxi:
 - [[ https://rxi.github.io/textbox_behaviour.html ]]
@@ -5,6 +6,7 @@ Based off the articles by rxi:
 */
 package text_edit_tg
 
+import "core:sys/darwin"
 import "base:runtime"
 import "core:time"
 import "core:mem"
@@ -13,8 +15,12 @@ import "core:unicode/utf8"
 
 import "core:fmt"
 
+import clay"../clay-odin"
+
+IS_USING_CLAY_UI::true
 DEFAULT_UNDO_TIMEOUT :: 300 * time.Millisecond
 repeat_cool_down_time::.1
+
 State :: struct {
 	is_activ:bool,
 
@@ -57,20 +63,57 @@ State :: struct {
 	using render_data:Render_Data,
 	using settings:Settings,
 }
-rune_style::struct{
-	color:[4]u8,
-}
+
+
 pars_type::enum{
 	str,
 
 }
 pars_data::struct{
 	string_is_oppen:bool,
+	last_space_pos:int,
+	last_space_ruun_pos:int,
+	count_last_space:int,
+	open_brackets:[dynamic]open_bracket,
+	comments:comments,
 }
+defalt_brackets_colors:[6][4]f32:{
+	{83, 222, 44,255},
+	{235, 216, 52,255},
+	{14, 173, 126,255},
+	{189, 12, 201,255},
+	{29, 130, 22,255},
+	{25, 93, 110,255}
+}
+all_brackets:[4][2]rune:{
+	{'[',']'},
+	{'{','}'},
+	{'(',')'},
+	{'<','>'},
+}
+open_bracket::struct{
+	pos:int,
+	type:[2]rune,
+	count:i32,
+}
+comment_type::enum{
+	non,
+	single_line,
+	multi_line,
+}
+comments::struct{
+	type:comment_type,
+	color:[4]f32,
+}
+/*
+asd
+asd
+*/
 Render_Data::struct{
 	userdata:rawptr,//can be used to interact whth text editing and rendering
 	blink:bool,
 	blink_time:f32,
+	draw_cursor_tf:bool,
 }
 Settings::struct{
 	max_lines:int,
@@ -79,6 +122,8 @@ Settings::struct{
 	do_syntax_highlig:bool,
 	blink_duration:f32,
 	carit_color:[4]u8,
+	// defalt_text_style:rune_style,
+	defalt_styles:style,
 
 		// Set these if you want cut/copy/paste functionality
 	set_clipboard: proc(user_data: rawptr, text: string) -> (ok: bool),
@@ -91,12 +136,43 @@ Settings::struct{
 	cb_entering_box: proc(last_s:^State,next_s:^State,),// extra logic when entering this text box
 
 }
+style::struct{
+	rune_:rune_style,
+	string_color:[4]u8,
+	bace_key_word_color:[4]u8,
+	important_key_word_color:[4]u8,
+	important_v2_key_word_color:[4]u8,
+	bace_type_color:[4]u8,
+	bracket_colors:[6][4]f32,
+}
+when IS_USING_CLAY_UI{
+	rune_style::struct{
+		using config:clay.TextElementConfig
+	}
+}else{
+	rune_style :: struct {
+		userData:           rawptr,
+		textColor:          [4]f32,
+		fontId:             u16,
+		fontSize:           u16,
+		letterSpacing:      u16,
+		lineHeight:         u16,
+		// wrapMode:           TextWrapMode,
+		// textAlignment:      TextAlignment,
+	}
+}
 Line_Data::struct{
-	width:int,
+	char_count:int,
 	carit_pos:int,
-	has_carit:bool,
-	show_debug_data:bool,
-	state:^State,//pointer to the curent state must be set manuly intended for help while rendering
+	
+	carit_w_pos:f32,
+	line_hight:f32,
+	line_width:f32,
+	line_x_pos:f32,
+	line_y_pos:f32,
+	// has_carit:bool,
+	// show_debug_data:bool,
+	// state:^State,//pointer to the curent state must be set manuly intended for help while rendering
 }
 
 Undo_State :: struct {
@@ -133,7 +209,7 @@ init :: proc(s: ^State, undo_text_allocator, undo_state_allocator: runtime.Alloc
 
 	s.undo.allocator = undo_state_allocator
 	s.redo.allocator = undo_state_allocator
-	append(&s.line_data,Line_Data{width=0})
+	append(&s.line_data,Line_Data{char_count=0})
 }
 
 // clear undo|redo strings and delete their stacks
@@ -156,6 +232,7 @@ begin :: proc(s: ^State, id: u64, builder: ^strings.Builder) {
 	s.id = id
 	s.selection = {len(builder.buf), 0}
 	s.builder = builder
+	s.draw_cursor_tf=false
 	update_time(s)
 	undo_clear(s, &s.undo)
 	undo_clear(s, &s.redo)
@@ -169,8 +246,8 @@ begin_persistent :: proc(s: ^State, id: u64, builder: ^strings.Builder) {
 		end(s)
 	}
 	s.id = id
-
 	s.builder = builder
+	s.draw_cursor_tf=false
 	update_time(s)
 	undo_clear(s, &s.undo)
 	undo_clear(s, &s.redo)
@@ -376,9 +453,7 @@ is_continuation_byte :: proc(b: byte) -> bool {
 
 // translates the caret position 
 translate_position :: proc(s: ^State, t: Translation) -> int {
-	is_space :: proc(b: byte) -> bool {
-		return b == ' ' || b == '\t' || b == '\n'
-	}
+
 
 	buf: []byte
 	if s.builder != nil {
@@ -619,7 +694,7 @@ perform_command :: proc(s: ^State, cmd: Command) {
 get_line_index::proc(s:^State,pos:int)->(line_index:int){
 	counter:int
 	for data,i in s.line_data{
-		counter += data.width
+		counter += data.char_count
 		if counter > pos{
 			line_index=i
 			return line_index
@@ -631,8 +706,8 @@ get_line_index::proc(s:^State,pos:int)->(line_index:int){
 
 get_line_start_pos::proc(s:^State,index:int)->(pos:int){
 	for data,i in s.line_data{
-		pos += data.width
-		if i >= index{return pos-data.width}
+		pos += data.char_count
+		if i >= index{return pos-data.char_count}
 	}
 	if index >= len(s.line_data)-1{
 		return pos
@@ -645,7 +720,7 @@ set_up_index::proc(s:^State){
 	last_line_index :=get_line_index(s,s.selection.x)
 	last_line: = get_line_start_pos(s,last_line_index )
 	dif_pos:=last_pos-last_line
-	if dif_pos>s.line_data[last_line_index].width {dif_pos=s.line_data[last_line_index].width}
+	if dif_pos>s.line_data[last_line_index].char_count {dif_pos=s.line_data[last_line_index].char_count}
 	s.up_index = get_line_start_pos(s,get_line_index(s,s.selection.x)-1)+dif_pos
 
 }
@@ -654,7 +729,7 @@ set_downe_index::proc(s:^State){
 	last_line_index :=get_line_index(s,s.selection.x)
 	last_line: = get_line_start_pos(s,last_line_index )
 	dif_pos:=last_pos-last_line
-	if dif_pos>s.line_data[last_line_index].width {dif_pos=s.line_data[last_line_index].width}
+	if dif_pos>s.line_data[last_line_index].char_count {dif_pos=s.line_data[last_line_index].char_count}
 	s.down_index = get_line_start_pos(s,last_line_index +1)+dif_pos
 
 }
@@ -672,10 +747,123 @@ is_new_line::proc(b: byte) -> bool {
 is_string::proc(b: byte) ->bool{
 	return (b == '\''||b == '\"')
 }
+is_space :: proc(b: byte) -> bool {
+	return b == ' ' || b == '\t' || b == '\n'
+}
+is_spacer :: proc(b: byte) -> bool {
+	return( 
+		b == ' ' ||
+		b == '\t' ||
+		b == '\n' ||
+		b == '{' ||
+		b == '}' ||
+		b == '(' ||
+		b == ')' ||
+		b == '<' ||
+		b == '>' ||
+		b == '+' ||
+		b == '-' ||
+		b == '=' ||
+		b == '*' ||
+		b == '/' ||
+		b == '?' ||
+		b == '!' ||
+		b == '"' ||
+		b == '`' ||
+		b == '\'' ||
+		b == '.' ||
+		b == ',' ||
+		b == '|' ||
+		b == ':' ||
+		b == '\\' ||
+		b == '&' ||
+		b == '^' ||
+		b == '$' ||
+		b == '`' 
+
+	)
+}
+is_bracket:: proc(b: byte) -> bool {
+	for bra in all_brackets {
+		if cast(u8)bra[0]==b || cast(u8)bra[1]==b {
+			return true
+		}
+	}
+	return false
+}
+get_bracket_data::proc(b: byte) ->(is_bracket:bool,is_opening:bool,type:[2]rune) {
+	for bra in all_brackets {
+		if cast(u8)bra[0]==b {
+			is_bracket = true
+			is_opening = true
+			type	   = bra
+			return
+		}
+		if cast(u8)bra[1]==b {
+			is_bracket = true
+			is_opening = false
+			type	   = bra
+			return 
+		}
+	}
+	is_bracket = false
+	is_opening = false
+	type	   = {}
+	return
+}
+
+is_comment:: proc(b: []byte,com:^comments){
+	if com.type ==.non{
+		if b[0]=='/'{
+			if len(b)>=2{
+				if  b[1]=='/'{
+					com.type = .single_line
+					com.color={1, 82, 22, 255}
+					if len(b)>=3{
+						if  b[2]=='!'{com.color={255, 10, 18,255}}
+						if  b[2]=='?'{com.color={0, 114, 214,255}}
+						if  b[2]=='#'{com.color={222, 152, 0,255}}
+					}
+				}else if  b[1]=='*'{
+					com.type = .multi_line
+					com.color={1, 82, 22, 255}
+					if len(b)>=3{
+						if  b[2]=='!'{com.color={255, 10, 18,255}}
+						if  b[2]=='?'{com.color={0, 114, 214,255}}
+						if  b[2]=='#'{com.color={222, 152, 0,255}}
+					}
+				}
+			}
+		}
+	}
+}
+should_close_comment::proc(b: []byte,current_com:^comments){
+	if current_com.type != .non && len(b)>=1{
+		if current_com.type ==.single_line{
+			// fmt.print(len(b),"\n")
+			if b[len(b)-1]=='\n'{
+				current_com.type=.non
+				current_com.color={}
+			}
+		}
+		if current_com.type ==.multi_line{
+			if b[len(b)-1]=='/'{
+				if len(b)-1-1>=0{
+					if b[len(b)-1-1]=='*'{
+						current_com.type=.non
+						current_com.color={}
+					}
+				}
+			}
+		}
+	}
+}
 
 mantaine_line_width_buffer::proc(s:^State){
 	clear(&s.line_data)
 	clear(&s.rune_style)
+	clear(&s.pars_data.open_brackets)
+	s.pars_data.comments = {}
 	s.pars_data.string_is_oppen = false
 
 	buf: []byte
@@ -688,6 +876,9 @@ mantaine_line_width_buffer::proc(s:^State){
 	char_count:int
 	line_count:int
 	temp_sel:=s.selection
+	s.pars_data.count_last_space = 0
+	s.pars_data.last_space_pos = 0
+	s.pars_data.last_space_ruun_pos = 0
 	for pos <= buf_len{
 		if !is_continuation_byte(buf[pos]) {
 			count += 1
@@ -702,13 +893,11 @@ mantaine_line_width_buffer::proc(s:^State){
 				char_count-=1
 			}
 		}
-		if s.do_syntax_highlig{
-			syntax_highlighter(s,buf,pos,count,char_count,line_count)
-		}
+
 
 		
 		if is_new_line(buf[pos])||count >= s.max_line_len{
-			append(&s.line_data,Line_Data{width=count})
+			append(&s.line_data,Line_Data{char_count=count})
 			// fmt.print(count,"\n")
 			line_count+=1
 			if line_count >= s.max_lines&& s.max_lines !=0{
@@ -725,18 +914,176 @@ mantaine_line_width_buffer::proc(s:^State){
 			count=0
 		}
 
+		if s.do_syntax_highlig{
+			syntax_highlighter(s,buf,pos,count,char_count,line_count)
+		}
+
 		pos += 1
 	}
-	append(&s.line_data,Line_Data{width=count})
+	append(&s.line_data,Line_Data{char_count=count})
 	s.char_count = char_count
 	s.line_count = line_count
 }
 
 syntax_highlighter::proc(s:^State,buf:[]byte,pos:int,count:int,char_count:int,line_count:int){
-	if s.pars_data.string_is_oppen{
-		assign_at(&s.rune_style, char_count, rune_style{color=[4]u8{255,255,122,255}})
-	}
+
 	if is_string(buf[pos]){
 		s.pars_data.string_is_oppen =!s.pars_data.string_is_oppen
+		style:=s.defalt_styles.rune_
+		style.textColor={
+			cast(f32)s.defalt_styles.string_color.x,
+			cast(f32)s.defalt_styles.string_color.y,
+			cast(f32)s.defalt_styles.string_color.z,
+			cast(f32)s.defalt_styles.string_color.w,
+	
+		}
+		assign_at(&s.rune_style, char_count-1, style)
+	}
+
+	if s.pars_data.string_is_oppen{
+		style:=s.defalt_styles.rune_
+		style.textColor={
+			cast(f32)s.defalt_styles.string_color.x,
+			cast(f32)s.defalt_styles.string_color.y,
+			cast(f32)s.defalt_styles.string_color.z,
+			cast(f32)s.defalt_styles.string_color.w,
+		}
+		assign_at(&s.rune_style, char_count-1, style)
+	}
+	{
+		brackets:=&s.pars_data.open_brackets
+		is_bracket, is_opening, type:= get_bracket_data(buf[pos])
+		if is_bracket{
+			if is_opening{
+				count:=0
+				append(brackets,open_bracket{pos=char_count-1,type=type,count=0})
+			}else{
+				#reverse for &bracket, i in brackets{
+					if bracket.type == type{
+						count:=len(brackets)%len(defalt_brackets_colors)
+						brackets_colors:=s.defalt_styles.bracket_colors
+						style:=s.defalt_styles.rune_
+						style.textColor={
+							brackets_colors[count].r,
+							brackets_colors[count].g,
+							brackets_colors[count].b,
+							brackets_colors[count].a,
+						}
+						assign_at(&s.rune_style, char_count-1, style)
+						assign_at(&s.rune_style, bracket.pos, style)
+						ordered_remove(brackets, i)
+						break
+					}
+				}
+			}
+		}
+	}
+
+	if is_spacer(buf[pos])||(pos==len(buf)-1&&!is_spacer(buf[pos])){
+		buf_offset:=0
+		if pos==len(buf)-1 {
+			buf_offset = 1
+			if (pos==len(buf)-1&&is_spacer(buf[pos])) {buf_offset=0}
+		}
+		if s.pars_data.count_last_space > 0{
+			// str:string="waffles"
+			switch  cast(string)buf[pos-s.pars_data.count_last_space:pos+buf_offset] {
+			//Bace_________________________________________________
+			// case str:
+				// color_key_words(s,char_count,s.defalt_styles.bace_key_word_color,buf_offset)
+				// fmt.print("test",cast(string)buf[pos-s.pars_data.count_last_space:pos+buf_offset],"__",pos==len(buf)-1,"\n")
+			case "proc","using": 
+				color_key_words(s,char_count,s.defalt_styles.bace_key_word_color,buf_offset)
+			case "map","bit_set","enum","struct","union","bit_field","matrix": 
+				color_key_words(s,char_count,s.defalt_styles.bace_key_word_color,buf_offset)
+			case "cast","transmute","auto_cast","distinct": 
+				color_key_words(s,char_count,s.defalt_styles.bace_key_word_color,buf_offset)
+			case "true","false","nil","context": 
+				color_key_words(s,char_count,s.defalt_styles.bace_key_word_color,buf_offset)
+				
+				//important____________________________________________
+			
+			case "for","in","if","else","where","when","switch","case","defer": 
+				color_key_words(s,char_count,s.defalt_styles.important_key_word_color,buf_offset)
+			case "dynamic": 
+				color_key_words(s,char_count,s.defalt_styles.important_key_word_color,buf_offset)
+			case "return","fallthrough","continue","break": 
+				color_key_words(s,char_count,s.defalt_styles.important_key_word_color,buf_offset)
+			case "or_else","or_return","or_continue","or_break","": 
+				color_key_words(s,char_count,s.defalt_styles.important_key_word_color,buf_offset)
+				
+			//important_v2____________________________________________
+			case "#unroll","#assert","#no_bounds_check","#align","#packed","#raw_union","#soa","#row_major","#no_nil","#no_copy","#partial","#no_alias",
+			"#any_int","#caller_location","#caller_expression","#c_vararg","#by_ptr","#optional_ok","#optional_allocator_error","#type","#sparse","#bounds_check",
+			"#type_assert","#no_type_assert","#panic","#config","#defined","#file","#directory","#line","#procedure","#exists","#branch_location","#location",
+			"#load","#hash","#load_hash","#load_directory": 
+				color_key_words(s,char_count,s.defalt_styles.important_v2_key_word_color,buf_offset)
+			case "#+test","#+ignore","#+private","#+feature","#+no-instrumentation": 
+				color_key_words(s,char_count,s.defalt_styles.important_v2_key_word_color,buf_offset)
+			case "package": 
+				color_key_words(s,char_count,s.defalt_styles.important_v2_key_word_color,buf_offset)
+			case "foreign","import": 
+				color_key_words(s,char_count,s.defalt_styles.important_v2_key_word_color,buf_offset)
+			//types____________________________________________________
+			case "int" ,"i8" ,"i16" ,"i32" ,"i64" ,"i128": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "uint", "u8", "u16", "u32", "u64", "u128", "uintptr": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "i16le", "i32le", "i64le", "i128le", "u16le", "u32le", "u64le", "u128le": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "i16be", "i32be", "i64be", "i128be", "u16be", "u32be", "u64be", "u128be": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "f16", "f32", "f64": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "f16le", "f32le", "f64le": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "complex32", "complex64", "complex128": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "quaternion64", "quaternion128", "quaternion256": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "rune": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "string","cstring": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "typeid": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "rawptr": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+			case "any": 
+				color_key_words(s,char_count,s.defalt_styles.bace_type_color,buf_offset)
+
+			}
+		
+		}
+		s.pars_data.count_last_space = 0
+		s.pars_data.last_space_ruun_pos = char_count
+		s.pars_data.last_space_pos=pos
+	}else{
+		s.pars_data.count_last_space+=1
+	}
+
+	{
+
+		is_comment(buf[pos:],&s.pars_data.comments)
+		should_close_comment(buf[:pos],&s.pars_data.comments)
+		if s.pars_data.comments.type!=.non{
+			style:=s.defalt_styles.rune_
+			style.textColor=s.pars_data.comments.color
+			assign_at(&s.rune_style, char_count-1, style)
+		}
+	}
+}
+
+
+color_key_words::proc(s:^State,char_count:int,color:[4]u8,buf_offset:int){
+	style:=s.defalt_styles.rune_
+	style.textColor={
+		cast(f32)color.x,
+		cast(f32)color.y,
+		cast(f32)color.z,
+		cast(f32)color.w,
+	}
+	for temp_char_count in  s.pars_data.last_space_ruun_pos..=char_count-2+buf_offset{
+		assign_at(&s.rune_style, temp_char_count, style)
 	}
 }

@@ -56,7 +56,7 @@ init::proc(){
 
 
 
-
+//  debugModeEnabled: bool = false
 update :: proc() {
 	free_all(context.temp_allocator)
 	maintain_input_info()
@@ -73,6 +73,10 @@ update :: proc() {
 		maintain_chunks(&g.w_map)
 		game_update_tick()
 	}
+	// if (rl.IsKeyPressed(.D)) {
+	// 	debugModeEnabled = !debugModeEnabled
+	// 	clay.SetDebugModeEnabled(debugModeEnabled)
+	// }
 }
 game_update_tick::proc(){
 
@@ -141,6 +145,7 @@ cleanup_game::proc(){
 	clean_up_event_data()
 	clean_up_ui_data()
 	clean_up_thread_pool()
+	destroy_all_text_boxes()
 
 }
 
