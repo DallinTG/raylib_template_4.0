@@ -37,23 +37,24 @@ ui_text_box::struct{
 }
 
 init_text_box::proc(settings:edit.Settings,name:string="text_box")->(handle:t_box_handle){
-    
     t_box:ui_text_box
     t_box.name = name
     t_box.str_builder = strings.builder_make()
     edit.init(&t_box.text_edit_state,context.allocator,context.allocator)
     t_box.text_edit_state.settings=settings
     
-    t_box.rd_texture=rl.LoadRenderTexture(1000, 1000)
+    // t_box.rd_texture=rl.LoadRenderTexture(1000, 1000)
     handle=hm.add(&g.tex_box_data.t_boxes,t_box)
     t_box_d :=hm.get(&g.tex_box_data.t_boxes,handle)
     t_box_d.text_edit_state.id  = cast(u64)handle.idx
     t_box_d.text_edit_state.gen = cast(u64)handle.gen
     t_box_d.element_declaration=get_defalt_text_box_element_declaration
-    if t_box_d.text_edit_state.defalt_styles.bracket_colors == {} {
-        t_box_d.text_edit_state.defalt_styles.bracket_colors = edit.defalt_brackets_colors
-    }
-    // fmt.print(t_box.text_edit_state.id,"\n\n")
+    // if t_box_d.text_edit_state.styles.bracket_colors == {} {
+    //     t_box_d.text_edit_state.styles.bracket_colors = edit.defalt_brackets_colors
+    // }
+    // if t_box_d.text_edit_state.styles.comment_colors == {} {
+    //     t_box_d.text_edit_state.styles.comment_colors = edit.defalt_comment_colors
+    // }
     return
 }
 get_defalt_text_box_element_declaration::proc(t_box:^ui_text_box)->(element_declaration:clay.ElementDeclaration){
@@ -126,8 +127,8 @@ maintain_textbox::proc(t_box:^ui_text_box){
             if state.selection.x >= line_start && state.selection.x <= line_end{
                 line_data.carit_pos = state.selection.x - line_start
             }
-            t_data_defalt:=&state.settings.defalt_styles.rune_.config
-            t_data_defalt.wrapMode=.Newlines
+            t_data_defalt:=&state.settings.styles.rune_
+            // t_data_defalt.wrapMode=.Newlines
             
             if len(text_string)>=line_end{
                 offset:int
@@ -169,11 +170,10 @@ maintain_textbox::proc(t_box:^ui_text_box){
                             line_i=i+line_start
                             if len(state.rune_style)>line_i{
                                 if state.rune_style[line_i] != {}{
-                                    t_data= &state.rune_style[line_i].config
+                                    t_data= &state.rune_style[line_i]
                                 }
                             }
-                            if last_t_data != t_data ||line_i == state.selection.x{
-                                // fmt.print(start_bunch,line_i,"waffles\n")
+                            if last_t_data != t_data||line_i == state.selection.x{
                                 do_text_bunch(state,&line_data,&text_string,start_bunch,line_i,last_t_data,&text_bunch_count) 
                                 start_bunch=line_i
                             }
@@ -206,11 +206,9 @@ maintain_textbox::proc(t_box:^ui_text_box){
             line_data.carit_w_pos += measure_text_string(str[start:end],t_data).x//-(cast(f32)t_data.letterSpacing)/2
         }
         if clay.UI(clay.ID_LOCAL("edit_text_bunch",cast(u32)bunch_count^))({
-            // id = clay.ID_LOCAL("edit_text_bunch",cast(u32)state.id),
             layout = {
                 sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
                 padding = ui_pading( 0, cast(f32)t_data.letterSpacing, 0, 0 ),
-                // padding = ui_pading( 0, 0, 0, 0 ),
                 childGap = ui_childGap(0),
                 childAlignment={x=.Left,y=.Center,},  
             },  
@@ -229,16 +227,79 @@ defalt_text_box_settings::proc()->(s:edit.Settings){
     s.set_clipboard =  set_clipboard
     s.do_syntax_highlig=true
 
-    s.defalt_styles.rune_.config=t_config_small()^
-    s.defalt_styles.string_color={133, 69, 20,255}
-    s.defalt_styles.bace_key_word_color={16, 34, 196,255}
-    s.defalt_styles.important_key_word_color={134, 29, 209,255}
-    s.defalt_styles.important_v2_key_word_color={133, 12, 24,255}
-    s.defalt_styles.bace_type_color={58, 201, 36,255}
+    sty:=& s.styles
+
+    // sty.rune_=t_config_small()^
+    sty.rune_.fontId=0
+    sty.rune_.fontSize=16
+    sty.rune_.letterSpacing=2
+    sty.rune_.lineHeight = 16
+    sty.rune_.textColor = {255,255,255,255}
+    sty_cc:=&sty.comment_colors
+
+    sty.strings               = sty.rune_
+    sty.bace_key_word         = sty.rune_
+    sty.important_key_word    = sty.rune_
+    sty.important_v2_key_word = sty.rune_
+    sty.bace_type             = sty.rune_
+
+    sty.strings.textColor               = {133, 69, 20,255}
+    sty.bace_key_word.textColor         = {16, 34, 196,255}
+    sty.important_key_word.textColor    = {134, 29, 209,255}
+    sty.important_v2_key_word.textColor = {133, 12, 24,255}
+    sty.bace_type.textColor             = {58, 201, 36,255}
+
+    sty.comment_colors = edit.defalt_comment_colors
+
+    for &bracket,i in &sty.bracket_colors{
+        defalt_bd:=edit.defalt_brackets_colors
+        bracket=defalt_bd[i]
+    }
+
+    merge_all_rune_settings(sty)
+
+
 
     // s.set_up_index_overide
 	// s.set_downe_index_overide
     return
+}
+merge_all_rune_settings::proc(sty:^edit.style){
+    
+    sty_cc:=&sty.comment_colors
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.TODO)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.and)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.at)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.defalt)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.dollar)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.error)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.pointer)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.question)
+    merge_defalt_rune_settings(&sty.rune_,&sty_cc.warning)
+
+    merge_defalt_rune_settings(&sty.rune_,&sty.strings)
+    merge_defalt_rune_settings(&sty.rune_,&sty.bace_key_word)
+    merge_defalt_rune_settings(&sty.rune_,&sty.important_key_word)
+    merge_defalt_rune_settings(&sty.rune_,&sty.important_v2_key_word)
+    merge_defalt_rune_settings(&sty.rune_,&sty.bace_type)
+
+    for &bracket,i in &sty.bracket_colors{
+        defalt_bd:=edit.defalt_brackets_colors
+        bracket=defalt_bd[i]
+        merge_defalt_rune_settings(&sty.rune_,&bracket)
+    }
+}
+merge_defalt_rune_settings::proc(bace_r:^clay.TextElementConfig,over_r:^clay.TextElementConfig){
+    if over_r.fontId            == 0  {over_r.fontId         = bace_r.fontId}
+    if over_r.fontSize          == 0  {over_r.fontSize       = bace_r.fontSize}
+    if over_r.letterSpacing     == 0  {over_r.letterSpacing  = bace_r.letterSpacing}
+    if over_r.lineHeight        == 0  {over_r.lineHeight     = bace_r.lineHeight}
+    if over_r.textColor         == {} {over_r.textColor      = bace_r.textColor}
+    if over_r.userData          ==nil {over_r.userData       = bace_r.userData}
+    over_r.wrapMode       = bace_r.wrapMode
+    over_r.textAlignment  = bace_r.textAlignment
+    // if over_r.wrapMode          !=nil{over_r.wrapMode       = bace_r.wrapMode}
+    // if over_r.textAlignment     != .Left {over_r.textAlignment  = bace_r.textAlignment}
 }
 
 ui_input_text_box::proc(t_box:^ui_text_box){
@@ -248,7 +309,8 @@ ui_input_text_box::proc(t_box:^ui_text_box){
     render_d:= &state.render_data
     settings:= &state.settings
     edit.begin_persistent(state,0,builder)
-    state.defalt_styles.rune_.config=t_config_medium()^
+    // state.styles.rune_=t_config_small()^
+    // merge_all_rune_settings(&state.styles)
 
     render_d.blink_time += g.time.dt
 
@@ -287,7 +349,6 @@ text_cursor::proc(state:^edit.State,pos:[2]f32,size:[2]f32,bg_color:[4]f32={0,0,
 text_box_do_imput::proc(state:^edit.State,){
     render_d:= &state.render_data
     if state.is_activ{
-        // fmt.print("waffles\n")
     new_rune:=rl.GetCharPressed()
     for new_rune != 0{
         edit.input_rune(state,new_rune)
@@ -386,7 +447,6 @@ text_box_do_imput::proc(state:^edit.State,){
         render_d.blink_time=0
     }
     
-    // fmt.print(strings.to_string(state.builder^),"\n")
     state.repeat_cool_down += g.time.dt
     if state.repeat_cool_down <-5 {state.repeat_cool_down = 0}
     if state.repeat_cool_down > edit.repeat_cool_down_time{
