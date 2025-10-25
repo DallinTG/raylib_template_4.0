@@ -30,6 +30,7 @@ input_e_id::enum{
     ui_shift,
     ui_drag_l_c,
     ui_esc,
+    ui_tab,
     ui_del,
     ui_back_space,
     ui_a_up,
@@ -66,7 +67,7 @@ input_event_data::struct{
 max_key_combo::4
 register_events::proc(){
     register_event(.jump,{{{data=               {id= rl.KeyboardKey.SPACE,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_debug,{{{data=           {id= rl.KeyboardKey.F10,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    register_event(.ui_debug,{{{data=           {id= rl.KeyboardKey.F10,            pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_l_c,{{{data=             {id= rl.MouseButton.LEFT,           pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_r_c,{{{data=             {id= rl.MouseButton.RIGHT,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_m_c,{{{data=             {id= rl.MouseButton.MIDDLE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
@@ -74,6 +75,7 @@ register_events::proc(){
     register_event(.pan_cam,{{{data=            {id= rl.MouseButton.RIGHT,          pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_drag_l_c,{{{data=        {id= rl.MouseButton.LEFT,           pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_shift,{{{data=           {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    register_event(.ui_tab,{{{data=             {id= rl.KeyboardKey.TAB,            pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_esc,{{{data=             {id= rl.KeyboardKey.ESCAPE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_back_space,{{{data=      {id= rl.KeyboardKey.BACKSPACE,      pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
     register_event(.ui_del,{{{data=             {id= rl.KeyboardKey.DELETE,         pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})

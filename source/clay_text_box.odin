@@ -117,6 +117,7 @@ maintain_textbox::proc(t_box:^ui_text_box){
         text_bunch_count:=0
         
         for &line_data, line_c in &state.line_data{
+            line_data.line_width=0
             line_start=line_end
             line_end+=line_data.char_count
         
@@ -152,32 +153,32 @@ maintain_textbox::proc(t_box:^ui_text_box){
                         },  
                         backgroundColor = {0,0,0,0},
                     }){
-                        
+                        // line_str:string=[]
                         line_i:=0
                         start_bunch:int=line_start
                         end_bunch:int=line_end-offset
-                        last_t_data:^clay.TextElementConfig=t_data_defalt
-                        t_data:^clay.TextElementConfig=t_data_defalt
+                        last_t_data:^edit.rune_style=t_data_defalt
+                        t_data:^edit.rune_style=t_data_defalt
+                        if len(state.rune_style)>0{
+                            last_t_data=&state.rune_style[line_i]
+                            t_data=&state.rune_style[line_i]
+                        }
                         l_box=clay.GetElementData(edit_text_line_id).boundingBox
-                        line_data.line_width=l_box.width
+                        // line_data.line_width=l_box.width
                         line_data.line_hight=l_box.height
-                        line_data.line_x_pos=l_box.x
-                        line_data.line_y_pos=l_box.y
-
-                        
+                        // line_data.line_x_pos=l_box.x
+                        // line_data.line_y_pos=l_box.y                        
                         for r ,i in text_string[line_start:line_end-offset]{
-                            t_data=t_data_defalt
+
                             line_i=i+line_start
-                            if len(state.rune_style)>line_i{
-                                if state.rune_style[line_i] != {}{
-                                    t_data= &state.rune_style[line_i]
-                                }
-                            }
-                            if last_t_data != t_data||line_i == state.selection.x{
+                            t_data = &state.rune_style[line_i]
+
+                            if t_data.next_t_bunch||line_i == state.selection.x{
                                 do_text_bunch(state,&line_data,&text_string,start_bunch,line_i,last_t_data,&text_bunch_count) 
                                 start_bunch=line_i
+                                last_t_data=t_data
                             }
-                            last_t_data=t_data
+                            
                         }
                         if end_bunch >0{
                             do_text_bunch(state,&line_data,&text_string,start_bunch,end_bunch,t_data,&text_bunch_count)
@@ -199,12 +200,12 @@ maintain_textbox::proc(t_box:^ui_text_box){
     pading::proc(t_data:^clay.TextElementConfig){
         clay.Text("\xC2\xA0",t_data)
     }
-    do_text_bunch::proc(state:^edit.State,line_data:^edit.Line_Data,str:^string,start:int,end:int,t_data:^clay.TextElementConfig,bunch_count:^int){
+    do_text_bunch::proc(state:^edit.State,line_data:^edit.Line_Data,str:^string,start:int,end:int,t_data:^edit.rune_style,bunch_count:^int){
         render_d:= &state.render_data
         bunch_count^+=1
-        if line_data.carit_pos > -1 && end <= state.selection.x{
-            line_data.carit_w_pos += measure_text_string(str[start:end],t_data).x//-(cast(f32)t_data.letterSpacing)/2
-        }
+        m_str:=str[start:end]
+        line_width_step:=measure_text_string(m_str,t_data).x//+cast(f32)t_data.letterSpacing
+
         if clay.UI(clay.ID_LOCAL("edit_text_bunch",cast(u32)bunch_count^))({
             layout = {
                 sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
@@ -214,15 +215,56 @@ maintain_textbox::proc(t_box:^ui_text_box){
             },  
             backgroundColor = {0,0,0,0},
         }){
-            clay.TextDynamic(str[start:end],t_data)
+            if t_data.tag == .tab{
+                size_of_space:=cast(i32)measure_text_string(" ",t_data).x
+                mod:=math.mod_f32(line_data.line_width, cast(f32)size_of_space * cast(f32)state.settings.tab_size)
+                space_px:=(cast(f32)size_of_space * cast(f32)state.settings.tab_size)-mod
+                line_width_step = space_px +cast(f32)t_data.letterSpacing
+                if clay.UI(clay.ID_LOCAL("tab_space",cast(u32)bunch_count^))({
+                    layout = {
+                        sizing = { width = clay.SizingFixed(space_px), height = clay.SizingFit({}) }, 
+                    },  
+                }){}
+            }else{
+                clay.TextDynamic(str[start:end],t_data)
+            }
+        }
+        
+        if line_data.carit_pos > -1 && end <= state.selection.x{
+            line_data.carit_w_pos += line_width_step
+           
+        }
+        line_data.line_width += line_width_step
+    }
+}
+
+text_cursor::proc(state:^edit.State,pos:[2]f32,size:[2]f32,bg_color:[4]f32={0,0,0,0},id:u32){
+    render_d:= &state.render_data
+    if !render_d.blink && state.is_activ{
+        render_d.draw_cursor_tf = true
+        if clay.UI(clay.ID_LOCAL("edit_text_cursor",id),)({
+            // id = clay.ID_LOCAL("edit_text_cursor",id),
+            layout = {
+                sizing = { width = clay.SizingFixed(size.x), height = clay.SizingFixed(size.y) },
+                padding = ui_pading( 1, 1, 1, 1 ),
+                childGap = ui_childGap(0),
+                childAlignment={x=.Center,y=.Center,},
+                layoutDirection=.LeftToRight,
+            },  
+            floating = { attachTo = .Parent ,offset=pos},
+            backgroundColor = bg_color,
+        }){
+
         }
     }
 }
+
 defalt_text_box_settings::proc()->(s:edit.Settings){
     s.max_char = 0
     s.max_line_len = 200
     s.carit_color={255,255,255,255}
     s.blink_duration = .35
+    s.tab_size = 4
     s.get_clipboard =  get_clipboard
     s.set_clipboard =  set_clipboard
     s.do_syntax_highlig=true
@@ -235,6 +277,7 @@ defalt_text_box_settings::proc()->(s:edit.Settings){
     sty.rune_.letterSpacing=2
     sty.rune_.lineHeight = 16
     sty.rune_.textColor = {255,255,255,255}
+    sty.rune_.wrapMode = .None
     sty_cc:=&sty.comment_colors
 
     sty.strings               = sty.rune_
@@ -248,6 +291,7 @@ defalt_text_box_settings::proc()->(s:edit.Settings){
     sty.important_key_word.textColor    = {134, 29, 209,255}
     sty.important_v2_key_word.textColor = {133, 12, 24,255}
     sty.bace_type.textColor             = {58, 201, 36,255}
+    sty.tab = edit.defalt_tab_style
 
     sty.comment_colors = edit.defalt_comment_colors
 
@@ -282,6 +326,9 @@ merge_all_rune_settings::proc(sty:^edit.style){
     merge_defalt_rune_settings(&sty.rune_,&sty.important_key_word)
     merge_defalt_rune_settings(&sty.rune_,&sty.important_v2_key_word)
     merge_defalt_rune_settings(&sty.rune_,&sty.bace_type)
+    merge_defalt_rune_settings(&sty.rune_,&sty.tab)
+
+    
 
     for &bracket,i in &sty.bracket_colors{
         defalt_bd:=edit.defalt_brackets_colors
@@ -325,26 +372,7 @@ ui_input_text_box::proc(t_box:^ui_text_box){
     maintain_textbox(t_box)
   
 }
-text_cursor::proc(state:^edit.State,pos:[2]f32,size:[2]f32,bg_color:[4]f32={0,0,0,0},id:u32){
-    render_d:= &state.render_data
-    if !render_d.blink && state.is_activ{
-        render_d.draw_cursor_tf = true
-        if clay.UI(clay.ID_LOCAL("edit_text_cursor",id),)({
-            // id = clay.ID_LOCAL("edit_text_cursor",id),
-            layout = {
-                sizing = { width = clay.SizingFixed(size.x), height = clay.SizingFixed(size.y) },
-                padding = ui_pading( 1, 1, 1, 1 ),
-                childGap = ui_childGap(0),
-                childAlignment={x=.Center,y=.Center,},
-                layoutDirection=.LeftToRight,
-            },  
-            floating = { attachTo = .Parent ,offset=pos},
-            backgroundColor = bg_color,
-        }){
 
-        }
-    }
-}
 
 text_box_do_imput::proc(state:^edit.State,){
     render_d:= &state.render_data
@@ -358,6 +386,13 @@ text_box_do_imput::proc(state:^edit.State,){
     }
     if is_input_event(.ui_back_space,   always_consume_d=true,){
         edit.perform_command(state,.Backspace)
+        state.repeat_cool_down=-edit.repeat_cool_down_time*2
+        render_d.blink=false
+        render_d.blink_time=0
+    }
+    if is_input_event(.ui_tab,   always_consume_d=true,){
+        // edit.perform_command(state,.)
+        edit.input_rune(state,9)
         state.repeat_cool_down=-edit.repeat_cool_down_time*2
         render_d.blink=false
         render_d.blink_time=0

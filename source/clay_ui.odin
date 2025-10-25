@@ -327,11 +327,11 @@ ui_worlds_page::proc(pd:^ui_page_data,){
 
 ui_start_page::proc(pd:^ui_page_data,){
     
-    ui_do_b_box(pd)
+    // ui_do_b_box(pd)
     if clay.UI(clay.ID(fmt.tprint(pd.id)))({
         // id = clay.ID(fmt.tprint(pd.id)),
         layout = {
-            sizing = { width = clay.SizingFit({}), height = clay.SizingFit({}) },
+            sizing = { width = clay.SizingFixed(cast(f32)g.window_info.w), height = clay.SizingFixed(cast(f32)g.window_info.h) },
             padding = ui_pading( 3, 3, 3, 3 ),
             childGap = ui_childGap(6),
             layoutDirection = .TopToBottom,
@@ -339,7 +339,7 @@ ui_start_page::proc(pd:^ui_page_data,){
 
         },
         // floating={offset={math.round(pd.current_offset.x+pd.center_offset.x),math.round(pd.current_offset.y+pd.center_offset.y)},attachTo = .Parent},
-        floating={offset={math.round(pd.center_offset.x),math.round(pd.center_offset.y)},attachTo = .Parent},
+        floating={offset={0,0},attachTo = .Parent},
         // floating={attachTo = .Parent,clipTo=.AttachedParent,},
         backgroundColor = {},
     }){

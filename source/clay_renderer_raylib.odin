@@ -9,8 +9,9 @@ import "core:strings"
 import rl"vendor:raylib"
 import "core:fmt"
 import "core:c"
+import edit"text_edit"
 // import edit"text_edit"
-import edit"core:text/edit"
+// import edit"core:text/edit"
 
 Raylib_Font :: struct {
     fontId: u16,
@@ -18,10 +19,11 @@ Raylib_Font :: struct {
 }
 custom_element::union{
     text_box_element,
-    costom_rune,
+    text_line,
 }
-costom_rune::struct{
-
+text_line::struct{
+    line_text:string,
+    rune_data:[]edit.rune_style,
 }
 text_box_element::struct{
     s:^edit.State,
@@ -273,12 +275,11 @@ clay_raylib_render :: proc(render_commands: ^clay.ClayArray(clay.RenderCommand),
             }
         case clay.RenderCommandType.Custom:
             cust_el :=cast(^custom_element)render_command.userData
-            switch v in cust_el {
+            switch el in cust_el {
                 case text_box_element: 
 
-                case costom_rune:
-                    
-
+                case text_line:
+      
             }
                 
             
