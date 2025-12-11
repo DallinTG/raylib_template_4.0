@@ -170,12 +170,12 @@ w_json_marshal :: proc(data:any ,path:string) {
 	// fmt.println("Done")
 }
 
-w_cbor_marshal :: proc(data:any ,path:string) {
+w_cbor_marshal :: proc(data:any ,path:string,call:=#caller_location) {
 
 	cbor_data, err := cbor.marshal(data)
 
 	if err != nil {
-		fmt.eprintfln("Unable to marshal cbor: %v", err)
+		fmt.eprintfln("Unable to marshal cbor: %v", err,call)
 		os.exit(1)
 	}
 
@@ -244,7 +244,7 @@ load_cbor_unmarshal :: proc(in_data: ^$T,path:string,)->(suc:bool){
 
 	unmarshal_err := cbor.unmarshal(data, in_data)
 	if unmarshal_err != nil {
-		fmt.eprintln("Failed to unmarshal the cbor file!")
+		fmt.eprintln("Failed to unmarshal the cbor file!",unmarshal_err)
 		return false
 	}
 	// fmt.eprintf("Result %v\n", in_data)

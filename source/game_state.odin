@@ -12,17 +12,25 @@ import "core:slice"
 import "core:strings"
 import "core:strconv"
 import "core:hash"
-
+import hm "handle_map_static"
 
 
 
 state::struct{
     world:world_state,
 	particle:all_particle_data,
+    // entities: hm.Handle_Map(Entity, Entity_Handle, max_entities),
+    // w_map:World_T_Map,
 	rand_number:f32,
 }
 world_state::struct{
     name:string,
+    cur_map:Map_Name,
+    w_map:[Map_Name]World_T_Map,
+}
+Map_Name::enum{
+    overworld,
+
 }
 settings::struct{
 	data:map[u32]setting_info,

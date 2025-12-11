@@ -34,6 +34,7 @@ World_T_Map::struct{
     save_location:string,
     t_maps:map[[2]int]chunck_handle,
     chuncks: hm.Handle_Map(T_Map, chunck_handle, 50),
+    entities: hm.Handle_Map(Entity, Entity_Handle, max_entities),
     type:t_map_type,
 }
 
@@ -100,19 +101,33 @@ Tile_G_Data::struct{ //this is the globl data for tiles
     // str_id:string,
     display_name:string,
 }
+Mising_Tile:Tile_G_Data={
+    id=1,
+    z_offset=0,
+    texture=.Mising_Texture,
+    bg_tex=.Mising_Texture,
+    // tile_set:Tile_Set,
+    // col:[4]f32,
+    // col_overide:[4]f32,
+    // str_id:string,
+    display_name="MISING",
+}
 
 Tile_ID::enum u32{
     air = 0,
-    dirt = #hash("dirt","adler32"),
-    sand = #hash("sand","adler32"),
-    whater = #hash("whater","adler32"),
+    dirt = #hash("dirt","murmur32"),
+    sand = #hash("sand","murmur32"),
+    whater = #hash("whater","murmur32"),
 }
 
-
+cur_map::proc()->(w_map:^World_T_Map){
+    w_map = &g.st.world.w_map[g.st.world.cur_map]
+    return
+}
 world_gen_thread::proc(){
     	
     for g.run{
-        if g.app_st.mode == .in_game{world_gen(&g.w_map)}
+        if g.app_st.mode == .in_game{world_gen(cur_map())}
         time.sleep(10000000)
     }
 
@@ -147,6 +162,9 @@ world_gen::proc(w_map:^World_T_Map){
 }
 
 maintain_chunks::proc(w_map:^World_T_Map){
+    if w_map.entities == {}{ 
+        lode_entities_on_map(w_map,&w_map.entities)
+    }
     chunck_iter := hm.make_iter(&w_map.chuncks)
 	for chunck, h in hm.iter(&chunck_iter) {
         chunck:=hm.get(&w_map.chuncks,h)
@@ -154,11 +172,11 @@ maintain_chunks::proc(w_map:^World_T_Map){
             if chunck.needs_to_be_rerendered{
                 un_load_mesh(&chunck.mesh)
                 rl.UploadMesh(&chunck.mesh, false)
-                w_cbor_marshal(chunck.tiles,strings.concatenate({fmt.tprint(world_save_location),"/",g.st.world.name,"/",fmt.tprint(w_map.type),"/",fmt.tprint(w_map.type),"_",fmt.tprint(chunck.pos)},context.temp_allocator))
+                w_cbor_marshal(chunck.tiles,strings.concatenate({world_save_location,"/",g.st.world.name,"/","chunks","/",fmt.tprint(w_map.type),"/",fmt.tprint(chunck.pos)},context.temp_allocator))
                 chunck.needs_to_be_rerendered = false
             }
             if chunck.needs_to_be_unloaded{
-                w_cbor_marshal(chunck.tiles,strings.concatenate({fmt.tprint(world_save_location),"/",g.st.world.name,"/",fmt.tprint(w_map.type),"/",fmt.tprint(w_map.type),"_",fmt.tprint(chunck.pos)},context.temp_allocator))
+                w_cbor_marshal(chunck.tiles,strings.concatenate({world_save_location,"/",g.st.world.name,"/","chunks","/",fmt.tprint(w_map.type),"/",fmt.tprint(chunck.pos)},context.temp_allocator))
                 unload_chunk(w_map,chunck.pos)
             }
         }
@@ -202,7 +220,7 @@ re_render_all_chuncks_on_screan::proc(w_map:^World_T_Map){
     ch_pos_b:=t_pos_c_pos(world_pos_t_pos(pos_bot_right))
     for x in ch_pos_t.x..=ch_pos_b.x {
         for y in ch_pos_t.y..=ch_pos_b.y {
-            chunck:=get_chunck(&g.w_map,{x,y})
+            chunck:=get_chunck(cur_map(),{x,y})
             if chunck != nil{
                 chunck.needs_to_be_rerendered = true
             }
@@ -217,7 +235,7 @@ draw_all_chunks::proc(){
 
     for x in ch_pos_t.x..=ch_pos_b.x {
         for y in ch_pos_t.y..=ch_pos_b.y {
-            chunck:=get_chunck(&g.w_map,{x,y})
+            chunck:=get_chunck(cur_map(),{x,y})
             if chunck != nil{
                 draw_t_map_chunk(chunck)
             }
@@ -227,21 +245,21 @@ draw_all_chunks::proc(){
 
 init_tile_data::proc(t_data:^map[u32]Tile_G_Data){
     for id in Tile_ID{
-        data:=get_reg_tile(cast(u32)id)
+        data:=get_tile(cast(u32)id)
         data.id = cast(u32)id
         data.col={1,1,1,1}
         // if id != nil{
         //     data.str_id = fmt.tprint(id)
         // }
     }
-    dirt:=get_reg_tile(cast(u32)Tile_ID.dirt)
+    dirt:=get_tile(cast(u32)Tile_ID.dirt)
     dirt.col={1,1,1,1}
     dirt.tile_set=gen_t_set_from_t_0(.Template_Tile_0)
     // dirt.texture= .Test_Path
     dirt.bg_tex=.Bg_Repeat_Tex
     dirt.z_offset = -11
 
-    sand:=get_reg_tile(cast(u32)Tile_ID.sand)
+    sand:=get_tile(cast(u32)Tile_ID.sand)
     // sand.texture= .Bg_Repeat_Tex
     sand.tile_set=gen_t_set_from_t_0(.Template_Tile_0)
     // sand.bg_tex=.Test_Path
@@ -265,7 +283,7 @@ gen_t_set_from_t_0::proc(t_0:Texture_Name)->(t_set:[16]Texture_Name){
     }
     return
 }
-get_reg_tile::proc(id:u32)->(data:^Tile_G_Data){
+get_tile::proc(id:u32)->(data:^Tile_G_Data){
     if &g.t_data[id] == nil{
         g.t_data[id]={}
     }
@@ -295,21 +313,22 @@ get_chunck::proc(w_map:^World_T_Map,cord:[2]int)->(t_map:^T_Map){
 make_fill_t_map_chunk::proc(w_map:^World_T_Map,cord:[2]int){
     make_ok:=make_chunk(w_map,cord)
     if make_ok{
-        chunck:=get_chunck(&g.w_map,cord)
-        t_data_suc:=load_cbor_unmarshal(&chunck.tiles,strings.concatenate({fmt.tprint(world_save_location),"/",g.st.world.name,"/",fmt.tprint(w_map.type),"/",fmt.tprint(w_map.type),"_",fmt.tprint(cord)},context.temp_allocator))
+        cur_map:= cur_map()
+        chunck:=get_chunck(cur_map,cord)
+        t_data_suc:=load_cbor_unmarshal(&chunck.tiles,strings.concatenate({world_save_location,"/",g.st.world.name,"/","chunks","/",fmt.tprint(w_map.type),"/",fmt.tprint(chunck.pos)},context.temp_allocator))
         if !t_data_suc{
             fill_t_map_chunk(chunck)
         }
         chunck.needs_to_be_updated = true
-        left_chunck:=get_chunck(&g.w_map,cord+{-1,0})
+        left_chunck:=get_chunck(cur_map,cord+{-1,0})
         if left_chunck!=nil{
             left_chunck.needs_to_be_updated = true
         }
-        down_chunck:=get_chunck(&g.w_map,cord+{0,-1})
+        down_chunck:=get_chunck(cur_map,cord+{0,-1})
         if down_chunck!=nil{
             down_chunck.needs_to_be_updated = true
         }
-        l_down_chunck:=get_chunck(&g.w_map,cord+{-1,-1})
+        l_down_chunck:=get_chunck(cur_map,cord+{-1,-1})
         if l_down_chunck!=nil{
             l_down_chunck.needs_to_be_updated = true
         }
@@ -317,6 +336,7 @@ make_fill_t_map_chunk::proc(w_map:^World_T_Map,cord:[2]int){
 }
 un_load_all_t_maps::proc(w_map:^World_T_Map){
     un_load_all_t_maps_meshes(w_map)
+    save_entities_on_map(w_map)
     delete(w_map.t_maps)
 }
 
@@ -349,26 +369,27 @@ re_calc_chunk::proc(t_map:^T_Map){
         for &row in &t_map.tiles{
             for &tile in &row{
                 // tile:=&t_map.tiles[cast(int)(x/tile_size)][cast(int)(y/tile_size)]
+                cur_map:= cur_map()
                 g_pos:=l_pos_g_pos(t_map,{cord_x,cord_y})
-                display_t:=get_display_t_g_cord(g_pos,&g.w_map)
-                tile:=get_tile_g_cord(g_pos,&g.w_map)
+                display_t:=get_display_t_g_cord(g_pos,cur_map)
+                tile:=get_tile_g_cord(g_pos,cur_map)
 
                 
                 if tile != nil{
                     display_t[2]=tile^
                     display_t[2].t_set_slot=get_tile_set_slot(tile.id,g_pos)
                 }
-                tile=get_tile_g_cord(g_pos+{1,0},&g.w_map)
+                tile=get_tile_g_cord(g_pos+{1,0},cur_map)
                 if tile != nil{
                     display_t[3]=tile^
                     display_t[3].t_set_slot=get_tile_set_slot(tile.id,g_pos)
                 }
-                tile=get_tile_g_cord(g_pos+{0,1},&g.w_map)
+                tile=get_tile_g_cord(g_pos+{0,1},cur_map)
                 if tile != nil{
                     display_t[0]=tile^
                     display_t[0].t_set_slot=get_tile_set_slot(tile.id,g_pos)
                 }
-                tile=get_tile_g_cord(g_pos+{1,1},&g.w_map)
+                tile=get_tile_g_cord(g_pos+{1,1},cur_map)
                 if tile != nil{
                     display_t[1]=tile^
                     display_t[1].t_set_slot=get_tile_set_slot(tile.id,g_pos)
@@ -386,25 +407,26 @@ re_calc_chunk::proc(t_map:^T_Map){
 }
 get_tile_set_slot::proc(id:u32,cord:[2]int)->(slot:u8){
     neighbours:[4]bool
-    c_tile:=get_tile_g_cord(cord,&g.w_map)
+    cur_map:= cur_map()
+    c_tile:=get_tile_g_cord(cord,cur_map)
     if c_tile!=nil{
         if c_tile.id == id{
             neighbours[2]=true
         }
     }
-    c_tile=get_tile_g_cord(cord+{1,0},&g.w_map)
+    c_tile=get_tile_g_cord(cord+{1,0},cur_map)
     if c_tile!=nil{
         if c_tile.id == id{
             neighbours[3]=true
         }
     }
-    c_tile=get_tile_g_cord(cord+{0,1},&g.w_map)
+    c_tile=get_tile_g_cord(cord+{0,1},cur_map)
     if c_tile!=nil{
         if c_tile.id == id{
             neighbours[0]=true
         }
     }
-    c_tile=get_tile_g_cord(cord+{1,1},&g.w_map)
+    c_tile=get_tile_g_cord(cord+{1,1},cur_map)
     if c_tile!=nil{
         
         if c_tile.id == id{

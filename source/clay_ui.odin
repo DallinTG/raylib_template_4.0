@@ -19,7 +19,7 @@ import "vendor:cgltf"
 import "core:unicode/utf8"
 import hm "handle_map_static"
 
-ui_render_command:clay.ClayArray(clay.RenderCommand)
+// ui_render_command:clay.ClayArray(clay.RenderCommand)
 
 // Define some colors.
 
@@ -61,8 +61,11 @@ ui_page_data::struct{
 }
 
 ui_state::struct{
+    ui_render_command:clay.ClayArray(clay.RenderCommand),
+    ui_mem:[^]u8,
     pages:[ui_pages]ui_page_data,
     world_saves_list:[]os.File_Info,
+    raylib_fonts :[dynamic]Raylib_Font,
 }
 font_names_temp::enum u16 {
     FONT_ID_BODY_16,
@@ -114,15 +117,16 @@ error_handler :: proc "c" (errorData: clay.ErrorData) {
     // Do something with the error data.
 }
 init_clay_ui::proc(){
-    min_memory_size: u32 = clay.MinMemorySize()
-    g.ui_mem = make([^]u8, min_memory_size)
-    arena: clay.Arena = clay.CreateArenaWithCapacityAndMemory(auto_cast min_memory_size, g.ui_mem)
+    min_memory_size: u32 = clay.MinMemorySize()*5
+    g.ui_st.ui_mem = make([^]u8, min_memory_size)
+    
+    arena: clay.Arena = clay.CreateArenaWithCapacityAndMemory(auto_cast min_memory_size, g.ui_st.ui_mem)
     clay.Initialize(arena, { cast(f32)rl.GetScreenWidth(), cast(f32)rl.GetScreenHeight() }, { handler = error_handler })
     // clay.SetMeasureTextFunction(measureText,nil)
     clay.SetMeasureTextFunction(measure_text,nil)
     // loadFont(FONT_ID_TITLE_56, 56, "resources/Calistoga-Regular.ttf")
-    append(&raylib_fonts,Raylib_Font{0,rl.GetFontDefault()})
-    append(&raylib_fonts,Raylib_Font{1,rl.GetFontDefault()})
+    append(&g.ui_st.raylib_fonts,Raylib_Font{0,rl.GetFontDefault()})
+    append(&g.ui_st.raylib_fonts,Raylib_Font{1,rl.GetFontDefault()})
     // raylib_fonts[1].fontId = 1
     // raylib_fonts[0].font = rl.GetFontDefault()
     // raylib_fonts[0].fontId = 1
@@ -142,7 +146,8 @@ init_clay_ui::proc(){
     init_defalt_ui_settings()
 }
 clean_up_ui::proc(){
-    free(g.ui_mem)
+    delete(g.ui_st.raylib_fonts)
+    free(g.ui_st.ui_mem)
 }
 update_clay_ui::proc(){
     mouse_pos:= rl.GetMousePosition()
@@ -158,7 +163,7 @@ update_clay_ui::proc(){
     clay.UpdateScrollContainers(false, transmute(clay.Vector2)rl.GetMouseWheelMoveV(), rl.GetFrameTime())
     clay.SetLayoutDimensions({auto_cast g.window_info.w,auto_cast g.window_info.h})
     cash_settings_ui()
-    ui_render_command = create_ui_layout()
+    g.ui_st.ui_render_command = create_ui_layout()
 
 }
 t_size_m:f32=1
@@ -389,8 +394,8 @@ ui_start_page::proc(pd:^ui_page_data,){
             }}
         }
         
-        ui_input_text_box(hm.get(&g.tex_box_data.t_boxes,pd.text_boxes[0]))
-        ui_input_text_box(hm.get(&g.tex_box_data.t_boxes,pd.text_boxes[1]))
+        // ui_input_text_box(hm.get(&g.tex_box_data.t_boxes,pd.text_boxes[0]))
+        // ui_input_text_box(hm.get(&g.tex_box_data.t_boxes,pd.text_boxes[1]))
     }
 }
 

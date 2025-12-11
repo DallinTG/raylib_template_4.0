@@ -27,15 +27,15 @@ LETTERS_IN_FONT :: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz12345678
 
 // A generated square in the atlas you can use with rl.SetShapesTexture to make
 // raylib shapes such as rl.DrawRectangleRec() use the atlas.
-SHAPES_TEXTURE_RECT :: Rect {483, 0, 10, 10}
+SHAPES_TEXTURE_RECT :: Rect {500, 0, 10, 10}
 
 Texture_Name :: enum {
 	None,
 	Test_Path,
 	Bg_Repeat_Tex,
 	Test_Dulgrid,
-	Template_Tile_1,
 	Template_Tile_0,
+	Template_Tile_1,
 	Template_Tile_2,
 	Template_Tile_4,
 	Template_Tile_3,
@@ -50,6 +50,7 @@ Texture_Name :: enum {
 	Template_Tile_13,
 	Template_Tile_14,
 	Template_Tile_15,
+	Mising_Texture,
 }
 
 Atlas_Texture :: struct {
@@ -72,8 +73,8 @@ atlas_textures: [Texture_Name]Atlas_Texture = {
 	.Test_Path = { rect = {194, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 	.Bg_Repeat_Tex = { rect = {0, 0, 128, 128}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {128, 128}, duration = 0.100},
 	.Test_Dulgrid = { rect = {129, 0, 64, 64}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {64, 64}, duration = 0.000},
-	.Template_Tile_1 = { rect = {211, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
-	.Template_Tile_0 = { rect = {228, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
+	.Template_Tile_0 = { rect = {211, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
+	.Template_Tile_1 = { rect = {228, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 	.Template_Tile_2 = { rect = {245, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 	.Template_Tile_4 = { rect = {262, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 	.Template_Tile_3 = { rect = {279, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
@@ -88,6 +89,7 @@ atlas_textures: [Texture_Name]Atlas_Texture = {
 	.Template_Tile_13 = { rect = {432, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 	.Template_Tile_14 = { rect = {449, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 	.Template_Tile_15 = { rect = {466, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
+	.Mising_Texture = { rect = {483, 0, 16, 16}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {16, 16}, duration = 0.000},
 }
 
 Animation_Name :: enum {

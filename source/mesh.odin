@@ -75,6 +75,7 @@ gen_mesh_tmap_from_tile::proc(
             for i in 0..<4{
                
                 t_g_data:=&g.t_data[tiles[i].id]
+                if t_g_data == nil{t_g_data=&Mising_Tile}
                 t_rec:=atlas_textures[t_g_data.tile_set[tiles[i].t_set_slot]].rect
                 t_rec2:=atlas_textures[t_g_data.bg_tex].rect
                 
@@ -98,6 +99,7 @@ gen_mesh_tmap_from_tile::proc(
                 tile_index+=1
             }
             t_g_data:=&g.t_data[tiles[0].id]
+            if t_g_data == nil{t_g_data=&Mising_Tile}
             t_rec:=atlas_textures[t_g_data.texture].rect
             t_rec2:=atlas_textures[t_g_data.bg_tex].rect
             if t_g_data.texture != nil {

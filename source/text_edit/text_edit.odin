@@ -7,6 +7,7 @@ Based off the articles by rxi:
 package text_edit_tg
 
 // import "core:sys/darwin"
+// import "core:sys/darwin"
 import "base:runtime"
 import "core:time"
 import "core:mem"
@@ -25,6 +26,7 @@ State :: struct {
 	is_activ:bool,
 
 	selection:[2]int,
+	highlighting_ref_pos:int,
 
 	line_start:int,
 	line_end:int,
@@ -35,6 +37,7 @@ State :: struct {
 	line_data:[dynamic]Line_Data,
 	pars_data:pars_data,
 	rune_style:[dynamic]rune_style,
+	highlighting:[dynamic]highlighting_data,
 	// initialized each "frame" with `begin`
 	builder: ^strings.Builder, // let the caller store the text buffer data
 	up_index, down_index: int, // multi-lines
@@ -119,7 +122,7 @@ Settings::struct{
 	do_syntax_highlig:bool,
 	blink_duration:f32,
 	carit_color:[4]u8,
-	// defalt_text_style:rune_style,
+	auto_tab_on_new_lin:bool,
 	styles:style,
 
 		// Set these if you want cut/copy/paste functionality
@@ -141,6 +144,11 @@ style::struct{
 	important_v2_key_word	:rune_style,
 	bace_type			   	:rune_style,
 	tab			   			:rune_style,
+	background_col:[4]u8,
+	tabs_indicators:clay.BorderElementConfig,
+	cursor_lin_outline:clay.BorderElementConfig,
+	selection_col:[4]f32,
+	line_pading:[4]f32,
 	bracket_colors:[6]rune_style,
 	comment_colors:comments_s,
 }
@@ -172,13 +180,20 @@ defalt_comment_colors:comments_s:{
 rune_tag::enum u8{
 	non,
 	tab,
+	ignore,
 }
 
 
 rune_style::struct{
 	using tc:clay.TextElementConfig,
 	tag:rune_tag,
+	background_col:[4]u8,
 	next_t_bunch:bool,
+}
+highlighting_data::struct{
+	xy:[2]f32,
+	wh:[2]f32,
+	color:[4]f32,
 }
 
 Line_Data::struct{
@@ -238,6 +253,8 @@ destroy :: proc(s: ^State) {
 	undo_clear(s, &s.redo)
 	delete(s.undo)
 	delete(s.redo)
+	delete(s.rune_style)
+	delete(s.pars_data.open_brackets)
 	if s.line_data != nil{delete(s.line_data)}
 	s.builder = nil
 }
@@ -366,11 +383,30 @@ input_text :: proc(s: ^State, text: string) -> int {
 	if has_selection(s) {
 		selection_delete(s)
 	}
+	//add the text
 	n := insert(s, s.selection[0], text)
 	offset := s.selection[0] + n
 	s.selection = {offset, offset}
+	//check if auto tab_on_new_lin is on
+	if s.settings.auto_tab_on_new_lin && text == "\n"{
+		lin_index:=get_line_index(s,s.selection.x)
+		tab_count:=get_lin_starting_tab_count(s,lin_index)
+		str:=strings.to_string(s.builder^)
+		if is_bracket_oppen_on_lin(s,lin_index)	{tab_count+=1}
+		// fmt.print(str[s.selection.x],"1\n")
+		if len(str)>s.selection.x{
+			fmt.print(str[s.selection.x],"2\n")
+			if is_closing_bracket(str[s.selection.x]){tab_count-=1}
+		}
+		if tab_count <0 {tab_count = 0}
+		for i in 0..<tab_count{
+			n := insert(s, s.selection[0], "\t")
+			offset := s.selection[0] + n
+			s.selection = {offset, offset}
+		}
+	}
 	// if text == "\n"{
-		// add_line(s,offset)
+	// add_line(s,offset)
 	// }
 	mantaine_line_width_buffer(s)
 	return n
@@ -468,7 +504,7 @@ selection_delete :: proc(s: ^State,mantaine_line_buff:bool=true,) {
 }
 
 is_continuation_byte :: proc(b: byte) -> bool {
-	return b >= 0x80 && b < 0xc0
+	return (b >= 0x80 && b < 0xc0)
 }
 
 // translates the caret position 
@@ -627,15 +663,34 @@ copy :: proc(s: ^State) -> bool {
 paste :: proc(s: ^State) -> bool {
 	if s.get_clipboard != nil {
 		str,ok:=s.get_clipboard(s.clipboard_user_data)
-		input_text(s, str)
+		norm_string:=normalize_text(s,str)
+		input_text(s, norm_string)
 		delete(str)
+		delete(norm_string)
 	}
 	
 	return s.get_clipboard != nil
 }
+normalize_text::proc(s: ^State, str:string)->(norm_str:string){
+	str:=str
+	builder:=strings.builder_make()
+	for ru, i in str{
+		if len(str)>=i{
+			if ru == '\r'&&str[i+1] == '\n'{
+				continue
+			}
+			if ru == '\r'&&str[i+1] != '\n'{
+				_,ok:=strings.write_rune(&builder,'\n')
+				continue
+			}
+		}
+		strings.write_rune(&builder,ru)
+	}
+	return strings.to_string(builder)
+}
 
 
-Command_Set :: distinct bit_set[Command; u32]
+Command_Set :: distinct bit_set[Command]
 
 Command :: enum u32 {
 	None,
@@ -670,6 +725,8 @@ Command :: enum u32 {
 	Select_End,
 	Select_Line_Start,
 	Select_Line_End,
+	// move_line_up,
+	// move_line_down
 }
 
 MULTILINE_COMMANDS :: Command_Set{.New_Line, .Up, .Down, .Select_Up, .Select_Down}
@@ -708,12 +765,31 @@ perform_command :: proc(s: ^State, cmd: Command) {
 	case .Select_End:        select_to(s, .End)
 	case .Select_Line_Start: select_to(s, .Soft_Line_Start)
 	case .Select_Line_End:   select_to(s, .Soft_Line_End)
+	// case .move_line_up:		 move_line_up(s)
+	// case .move_line_down:	 move_line_down(s)
 	}
 }
+// move_line_up::proc(s:^State){
+// 	lin_index := get_line_index(s,s.selection.x)
+// 	lin_start := get_lin_start_pos(s,lin_index)
+// 	lin_car_count:=s.line_data[lin_index].char_count
+// 	lin_end   := lin_car_count+lin_start
+// 	if lin_index > 0{
+// 		temp_string:=
+// 		for i in 0..<lin_car_count{
+// 			ordered_remove(&s.builder.buf,lin_start)
+// 		}
+// 	}
+// 	mantaine_line_width_buffer(s)
+// }
+// move_line_down::proc(s:^State){
+// 	lin_index := get_line_index(s,s.selection.x)
+// 	mantaine_line_width_buffer(s)
+// }
 
-get_line_index::proc(s:^State,pos:int)->(line_index:int){
+get_line_index::proc(s:^State,pos:int,str_index:int=0)->(line_index:int){
 	counter:int
-	for data,i in s.line_data{
+	for data,i in s.line_data[str_index:]{
 		counter += data.char_count
 		if counter > pos{
 			line_index=i
@@ -724,7 +800,7 @@ get_line_index::proc(s:^State,pos:int)->(line_index:int){
 	return
 }
 
-get_line_start_pos::proc(s:^State,index:int)->(pos:int){
+get_lin_start_pos::proc(s:^State,index:int)->(pos:int){
 	for data,i in s.line_data{
 		pos += data.char_count
 		if i >= index{return pos-data.char_count}
@@ -738,28 +814,56 @@ get_line_start_pos::proc(s:^State,index:int)->(pos:int){
 set_up_index::proc(s:^State){
 	last_pos:int=s.selection.x
 	last_line_index :=get_line_index(s,s.selection.x)
-	last_line: = get_line_start_pos(s,last_line_index )
+	last_line: = get_lin_start_pos(s,last_line_index )
 	dif_pos:=last_pos-last_line
 	if dif_pos>s.line_data[last_line_index].char_count {dif_pos=s.line_data[last_line_index].char_count}
-	s.up_index = get_line_start_pos(s,get_line_index(s,s.selection.x)-1)+dif_pos
+	s.up_index = get_lin_start_pos(s,get_line_index(s,s.selection.x)-1)+dif_pos
 
 }
 set_downe_index::proc(s:^State){
 	last_pos:int=s.selection.x
 	last_line_index :=get_line_index(s,s.selection.x)
-	last_line: = get_line_start_pos(s,last_line_index )
+	last_line: = get_lin_start_pos(s,last_line_index )
 	dif_pos:=last_pos-last_line
 	if dif_pos>s.line_data[last_line_index].char_count {dif_pos=s.line_data[last_line_index].char_count}
-	s.down_index = get_line_start_pos(s,last_line_index +1)+dif_pos
+	s.down_index = get_lin_start_pos(s,last_line_index +1)+dif_pos
 
 }
-pos_to_line_pos::proc(s:^State,pos:int)->(new_pos:int){
+pos_to_lin_pos::proc(s:^State,pos:int)->(new_pos:int){
 	pos:=pos
-	last_line_index :=get_line_index(s,pos)
-	last_line: = get_line_start_pos(s,last_line_index )
-	ew_pos:=pos-last_line
+	lin_index :=get_line_index(s,pos)
+	lin_start_pos: = get_lin_start_pos(s,lin_index )
+	new_pos=pos-lin_start_pos
 	return
 }
+pos_to_lin_pos_fast::proc(s:^State,pos:int,lin_start_pos:int)->(new_pos:int){
+	pos:=pos
+	new_pos=pos-lin_start_pos
+	return
+}
+
+get_lin_starting_tab_count::proc(s:^State,lin_index:int)->(count:int){
+	lin_start_pos:=get_lin_start_pos(s,lin_index)
+	str:=strings.to_string(s.builder^)
+	for ru in str[lin_start_pos:]{
+		if ru != '\t'{break}
+		count+=1
+	}
+	return
+}
+is_bracket_oppen_on_lin::proc(s:^State,lin_index:int)->(bracket_is_oppen:bool){
+	lin_start_pos:=get_lin_start_pos(s,lin_index)
+	str:=strings.to_string(s.builder^)
+	for ru, i in str[lin_start_pos:]{
+		if ru == '\n'			{break}
+		if i == s.selection.x	{break}
+		if i > 1000 			{break}
+		if is_closing_bracket	(cast(byte)ru){bracket_is_oppen = false}
+		if is_oppening_bracket	(cast(byte)ru){bracket_is_oppen = true}
+	}
+	return
+}
+
 
 is_new_line::proc(b: byte) -> bool {
 	return b == '\n'
@@ -768,16 +872,20 @@ is_string::proc(b: byte) ->bool{
 	return (b == '\''||b == '\"')
 }
 is_space :: proc(b: byte) -> bool {
-	return b == ' ' || b == '\t' || b == '\n'
+	return b == ' ' || b == '\t' || b == '\n'|| b == '\r'
 }
 is_tab :: proc(b: byte) -> bool {
 	return b == '\t' 
+}
+is_r :: proc(b: byte) -> bool {
+	return b == '\r' 
 }
 is_spacer :: proc(b: byte) -> bool {
 	return( 
 		b == ' ' ||
 		b == '\t' ||
 		b == '\n' ||
+		b == '\r' ||
 		b == '{' ||
 		b == '}' ||
 		b == '(' ||
@@ -814,6 +922,22 @@ is_bracket:: proc(b: byte) -> bool {
 	}
 	return false
 }
+is_oppening_bracket:: proc(b: byte) -> bool {
+	for bra in all_brackets {
+		if cast(u8)bra[0]==b {
+			return true
+		}
+	}
+	return false
+}
+is_closing_bracket:: proc(b: byte) -> bool {
+	for bra in all_brackets {
+		if cast(u8)bra[1]==b {
+			return true
+		}
+	}
+	return false
+}
 get_bracket_data::proc(b: byte) ->(is_bracket:bool,is_opening:bool,type:[2]rune) {
 	for bra in all_brackets {
 		if cast(u8)bra[0]==b {
@@ -834,17 +958,7 @@ get_bracket_data::proc(b: byte) ->(is_bracket:bool,is_opening:bool,type:[2]rune)
 	type	   = {}
 	return
 }
-// defalt_comment_colors:comment_colors:{
-// 	defalt	={1, 82, 22,  255},
-// 	error	={255, 10, 18,255},
-// 	question={0, 114, 214,255},
-// 	warning	={222, 152, 0,255},
-//	TODO	={232, 209, 0,255},
-// 	at		={61, 51, 245,255},
-// 	dollar	={20, 201, 0, 255},
-// 	pointer	={148, 0, 156,255},
-// 	and		={105, 42, 21,255},
-// }
+
 is_comment:: proc(s:^State,b: []byte,com:^comments){
 	c_col:=&s.styles.comment_colors
 	if com.type ==.non{
@@ -904,7 +1018,6 @@ is_comment:: proc(s:^State,b: []byte,com:^comments){
 should_close_comment_single_line::proc(b: []byte,current_com:^comments){
 	if current_com.type != .non && len(b)>=1{
 		if current_com.type ==.single_line{
-			// fmt.print(len(b),"\n")
 			if b[0]=='\n'{
 				current_com.type=.non
 				current_com.sty={}
@@ -962,11 +1075,9 @@ mantaine_line_width_buffer::proc(s:^State){
 			}
 		}
 
-
 		
 		if is_new_line(buf[pos])||count >= s.max_line_len{
 			append(&s.line_data,Line_Data{char_count=count})
-			// fmt.print(count,"\n")
 			line_count+=1
 			if line_count >= s.max_lines&& s.max_lines !=0{
 
@@ -983,10 +1094,17 @@ mantaine_line_width_buffer::proc(s:^State){
 		}
 		//@ set tags
 		assign_at(&s.rune_style, char_count-1, s.styles.rune_) //set_defalt
+		
 		if is_tab(buf[pos]){
-			// s.rune_style[char_count].tag=.tab
-			assign_at(&s.rune_style, char_count-1, s.styles.tab)
+			// assign_at(&s.rune_style, char_count-1, s.styles.tab)
+			s.rune_style[char_count-1] = s.styles.tab
 		}
+		if is_r(buf[pos]){
+			// assign_at(&s.rune_style, char_count-1, rune_style{tag=.ignore})
+			s.rune_style[char_count-1].tag = .ignore
+		}
+
+		
 
 		if s.do_syntax_highlig{
 			syntax_highlighter(s,buf,pos,count,char_count,line_count)
@@ -1003,7 +1121,7 @@ mantaine_line_width_buffer::proc(s:^State){
 		last_ru = s.rune_style[0]
 	}
 	for &ru , i in &s.rune_style{
-		if last_ru != ru{
+		if last_ru.tc != ru.tc||last_ru.tag != ru.tag ||last_ru.background_col != ru.background_col ||ru.tag == .tab{
 			ru.next_t_bunch = true
 		}
 		last_ru=ru
@@ -1014,11 +1132,13 @@ syntax_highlighter::proc(s:^State,buf:[]byte,pos:int,count:int,char_count:int,li
 	if s.pars_data.comments.type==.non{
 		if is_string(buf[pos]){
 			s.pars_data.string_is_oppen =!s.pars_data.string_is_oppen
-			assign_at(&s.rune_style, char_count-1, s.styles.strings)
+			// assign_at(&s.rune_style, char_count-1, s.styles.strings)
+			s.rune_style[char_count-1] = s.styles.strings
 		}
 
 		if s.pars_data.string_is_oppen{
-			assign_at(&s.rune_style, char_count-1, s.styles.strings)
+			// assign_at(&s.rune_style, char_count-1, s.styles.strings)
+			s.rune_style[char_count-1] = s.styles.strings
 		}
 		if !s.pars_data.string_is_oppen{
 			{
@@ -1032,9 +1152,10 @@ syntax_highlighter::proc(s:^State,buf:[]byte,pos:int,count:int,char_count:int,li
 						#reverse for &bracket, i in brackets{
 							if bracket.type == type{
 								count:=len(brackets)%len(defalt_brackets_colors)
-								// brackets_colors:=&s.styles.bracket_colors
-								assign_at(&s.rune_style, char_count-1, s.styles.bracket_colors[count])
-								assign_at(&s.rune_style, bracket.pos,  s.styles.bracket_colors[count])
+								// assign_at(&s.rune_style, char_count-1, s.styles.bracket_colors[count])
+								// assign_at(&s.rune_style, bracket.pos,  s.styles.bracket_colors[count])
+								s.rune_style[char_count-1] = s.styles.bracket_colors[count]
+								s.rune_style[bracket.pos]  = s.styles.bracket_colors[count]
 								ordered_remove(brackets, i)
 								break
 							}
@@ -1057,7 +1178,6 @@ syntax_highlighter::proc(s:^State,buf:[]byte,pos:int,count:int,char_count:int,li
 					//Bace_________________________________________________
 					// case str:
 						// color_key_words(s,char_count,s.styles.bace_key_word_color,buf_offset)
-						// fmt.print("test",cast(string)buf[pos-s.pars_data.count_last_space:pos+buf_offset],"__",pos==len(buf)-1,"\n")
 					case "proc","using": 
 						color_key_words(s,char_count,s.styles.bace_key_word,buf_offset)
 					case "map","bit_set","enum","struct","union","bit_field","matrix": 
@@ -1133,7 +1253,8 @@ syntax_highlighter::proc(s:^State,buf:[]byte,pos:int,count:int,char_count:int,li
 		should_close_comment_single_line(buf[pos:],&s.pars_data.comments)
 		should_close_comment_multi_line(buf[:pos],&s.pars_data.comments)
 		if s.pars_data.comments.type!=.non{
-			assign_at(&s.rune_style, char_count-1, s.pars_data.comments.sty)
+			// assign_at(&s.rune_style, char_count-1, s.pars_data.comments.sty)
+			s.rune_style[char_count-1]=s.pars_data.comments.sty
 		}
 	}
 	

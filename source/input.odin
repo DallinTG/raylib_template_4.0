@@ -25,6 +25,7 @@ input_data::struct{
 input_e_id::enum{
     ui_debug,
     ui_l_c,
+    ui_l_c_d,
     ui_r_c,
     ui_m_c,
     ui_shift,
@@ -46,6 +47,7 @@ input_e_id::enum{
     ui_t_select_up,
     ui_t_select_down,
     ui_t_select_all,
+    ui_move_lin_up,
     enter,
     pan_cam,
     jump,
@@ -66,35 +68,37 @@ input_event_data::struct{
 }
 max_key_combo::4
 register_events::proc(){
-    register_event(.jump,{{{data=               {id= rl.KeyboardKey.SPACE,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_debug,{{{data=           {id= rl.KeyboardKey.F10,            pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_l_c,{{{data=             {id= rl.MouseButton.LEFT,           pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_r_c,{{{data=             {id= rl.MouseButton.RIGHT,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_m_c,{{{data=             {id= rl.MouseButton.MIDDLE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.test,{{{data=               {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{data= {id= rl.KeyboardKey.SPACE, pressed= true,down= false, released= false}, consum_press= true, consum_down= true,},{},{}}})
-    register_event(.pan_cam,{{{data=            {id= rl.MouseButton.RIGHT,          pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_drag_l_c,{{{data=        {id= rl.MouseButton.LEFT,           pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_shift,{{{data=           {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_tab,{{{data=             {id= rl.KeyboardKey.TAB,            pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_esc,{{{data=             {id= rl.KeyboardKey.ESCAPE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_back_space,{{{data=      {id= rl.KeyboardKey.BACKSPACE,      pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_del,{{{data=             {id= rl.KeyboardKey.DELETE,         pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_a_down,{{{data=          {id= rl.KeyboardKey.DOWN,           pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_a_up,{{{data=            {id= rl.KeyboardKey.UP,             pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_a_left,{{{data=          {id= rl.KeyboardKey.LEFT,           pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_a_right,{{{data=         {id= rl.KeyboardKey.RIGHT,          pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_enter,{{{data=           {id= rl.KeyboardKey.ENTER,          pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
-    register_event(.ui_coppy,{{{data=           {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.C,    pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_past,{{{data=            {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.V,    pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_cut,{{{data=             {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.X,    pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_t_select_left,{{{data=   {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.LEFT, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_t_select_right,{{{data=  {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.RIGHT,pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_t_select_up,{{{data=     {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.UP,   pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_t_select_down,{{{data=   {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.DOWN, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.ui_t_select_all,{{{data=    {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.A, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
-    register_event(.enter,{{{data=              {id= rl.KeyboardKey.ENTER,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.jump,{{{data=               {id= rl.KeyboardKey.SPACE,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_debug,{{{data=           {id= rl.KeyboardKey.F10,            pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_l_c,{{{data=             {id= rl.MouseButton.LEFT,           pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_l_c_d,{{{data=           {id= rl.MouseButton.LEFT,           pressed= false,down= true, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_r_c,{{{data=             {id= rl.MouseButton.RIGHT,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_m_c,{{{data=             {id= rl.MouseButton.MIDDLE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.test,{{{data=               {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{data= {id= rl.KeyboardKey.SPACE, pressed= true,down= false, released= false}, consum_press= true, consum_down= true,},{},{}}})
+    reg_event(.pan_cam,{{{data=            {id= rl.MouseButton.RIGHT,          pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_drag_l_c,{{{data=        {id= rl.MouseButton.LEFT,           pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_shift,{{{data=           {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_tab,{{{data=             {id= rl.KeyboardKey.TAB,            pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_esc,{{{data=             {id= rl.KeyboardKey.ESCAPE,         pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_back_space,{{{data=      {id= rl.KeyboardKey.BACKSPACE,      pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_del,{{{data=             {id= rl.KeyboardKey.DELETE,         pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_a_down,{{{data=          {id= rl.KeyboardKey.DOWN,           pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_a_up,{{{data=            {id= rl.KeyboardKey.UP,             pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_a_left,{{{data=          {id= rl.KeyboardKey.LEFT,           pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_a_right,{{{data=         {id= rl.KeyboardKey.RIGHT,          pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_enter,{{{data=           {id= rl.KeyboardKey.ENTER,          pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
+    reg_event(.ui_coppy,{{{data=           {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.C,    pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_past,{{{data=            {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.V,    pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_cut,{{{data=             {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.X,    pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_t_select_left,{{{data=   {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.LEFT, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_t_select_right,{{{data=  {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.RIGHT,pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_t_select_up,{{{data=     {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.UP,   pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_t_select_down,{{{data=   {id= rl.KeyboardKey.LEFT_SHIFT,     pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.DOWN, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_t_select_all,{{{data=    {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.A, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.ui_move_lin_up,{{{data=    {id= rl.KeyboardKey.LEFT_CONTROL,   pressed= false ,down= true , released= false}, consum_press= true , consum_down= true ,},{data=       {id= rl.KeyboardKey.UP, pressed= true ,down= true , released= false}, consum_press= true , consum_down= true ,},{},{}}})
+    reg_event(.enter,{{{data=              {id= rl.KeyboardKey.ENTER,          pressed= true ,down= false, released= false}, consum_press= true , consum_down= true ,},{},{},{}}})
 }
-register_event::proc(i_event:input_e_id,i_e_data:input_event_data){
+reg_event::proc(i_event:input_e_id,i_e_data:input_event_data){
     g.event.list[i_event] = i_e_data
 }
 

@@ -4,6 +4,9 @@ add lighting
 add texturpacks
 fix hot relode
 
+add background colors
+
+
 
 
 
@@ -11,3 +14,4 @@ fix hot relode
 
 ______________________________________Complete________________________________________
 add conected textures to tmap
+add_hylighting

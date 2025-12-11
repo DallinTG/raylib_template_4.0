@@ -70,8 +70,9 @@ update :: proc() {
 	update_clay_ui()
 	do_inputs()
 	if g.app_st.mode == .in_game{
-		maintain_chunks(&g.w_map)
+		maintain_chunks(cur_map())
 		game_update_tick()
+
 	}
 	// if (rl.IsKeyPressed(.D)) {
 	// 	debugModeEnabled = !debugModeEnabled
@@ -80,6 +81,9 @@ update :: proc() {
 }
 game_update_tick::proc(){
 
+	if g.time.is_60h_this_frame{
+		do_entitys()
+	}
 	if is_input_event(.ui_l_c){
 
 
@@ -87,17 +91,18 @@ game_update_tick::proc(){
 		fmt.print(pos,"\n")
 		// log_all_pos(pos)
 		c_pos:=t_pos_c_pos(world_pos_t_pos(pos))
-		chunck:=get_chunck(&g.w_map,c_pos)
+		chunck:=get_chunck(cur_map(),c_pos)
 		l_pos:=t_pos_l_pos(world_pos_t_pos(pos))
 		set_tile_in_tile_map(chunck,l_pos,Tile{id = cast(u32)Tile_ID.sand})
 		
 		// fmt.print(l_pos_g_pos(get_t_map(&w_map,c_pos),t_pos_l_pos(world_pos_t_pos(pos))),"l_pos to g_pos \n")
-		// re_render_chunk(get_t_map(&g.w_map,c_pos))
-		// re_render_all_chuncks_on_screan(&g.w_map)
+		// re_render_chunk(get_t_map(cur_map(),c_pos))
+		// re_render_all_chuncks_on_screan(cur_map())
 	}
 
 	if is_input_event(.jump){
 		fmt.print("jump1\n")
+		add_simp_mob()
 	}
 	if is_input_event(.jump){
 		fmt.print("jump2\n")
@@ -122,13 +127,14 @@ draw :: proc() {
 	rl.EndBlendMode()
 
 	draw_all_chunks()
+	render_entitys()
 
 	rl.EndShaderMode()
 	rl.EndMode3D()
 
 	rl.BeginMode2D(ui_camera())
 
-	clay_raylib_render(&ui_render_command)
+	clay_raylib_render(&g.ui_st.ui_render_command)
 	rl.EndMode2D()
 
 	rl.DrawFPS(10,10)
@@ -141,7 +147,7 @@ cleanup_game::proc(){
 	clean_up_tile_data()
 	thread.join(g.world_gen_thread)
 	thread.destroy(g.world_gen_thread)
-	un_load_all_t_maps(&g.w_map)
+	un_load_all_t_maps(cur_map())
 	clean_up_event_data()
 	clean_up_ui_data()
 	clean_up_thread_pool()
